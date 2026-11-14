@@ -1,0 +1,6 @@
+# Optional: fused CUDA Mamba-2 kernels (Linux + NVIDIA GPU + matching CUDA toolkit only).
+# AstroGuard-X automatically uses them when installed and ModelConfig.prefer_official_mamba=True;
+# otherwise the built-in pure-PyTorch Mamba-2 (SSD) implementation is used.
+-r requirements.txt
+mamba-ssm>=2.2; sys_platform == "linux"      # state-spaces/mamba (Apache-2.0)
+causal-conv1d>=1.4; sys_platform == "linux"  # (BSD-3-Clause)

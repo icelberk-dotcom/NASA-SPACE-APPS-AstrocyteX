@@ -1,0 +1,24 @@
+# AstroGuard-X - core runtime dependencies (see THIRD_PARTY_NOTICES.md for licences & attribution)
+# Install:  pip install -r requirements.txt        (or run scripts/setup.ps1 / scripts/setup.sh)
+
+# --- Deep learning ----------------------------------------------------------------
+torch>=2.2                 # PyTorch (BSD-3-Clause): Mamba-2, TCN, TFT, fusion, Neural ODE/PINN, Bayesian head
+numpy>=1.26                # NumPy (BSD-3-Clause)
+scipy>=1.11                # SciPy (BSD-3-Clause): ECG peak detection
+pandas>=2.0                # pandas (BSD-3-Clause): CSV ECG parsing
+scikit-learn>=1.3          # scikit-learn (BSD-3-Clause): evaluation metrics
+
+# --- Generative AI -----------------------------------------------------------------
+google-genai>=1.0          # Google GenAI SDK (Apache-2.0): Gemini reasoning & task generation
+
+# --- Backend API -------------------------------------------------------------------
+fastapi>=0.110             # FastAPI (MIT)
+uvicorn[standard]>=0.27    # Uvicorn (BSD-3-Clause)
+pydantic>=2.5              # Pydantic (MIT)
+python-multipart>=0.0.9    # ECG file uploads (Apache-2.0)
+requests>=2.31             # HTTP client (Apache-2.0): ECG service + REST client
+python-dotenv>=1.0         # .env loading (BSD-3-Clause)
+
+# --- Dashboard ---------------------------------------------------------------------
+streamlit>=1.37            # Streamlit (Apache-2.0): dashboard UI (needs st.fragment)
+plotly>=5.18               # Plotly (MIT): charts

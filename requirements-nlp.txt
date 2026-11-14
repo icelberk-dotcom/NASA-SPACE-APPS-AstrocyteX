@@ -1,0 +1,4 @@
+# Optional: semantic (multilingual) encoding of the subjective log via Hugging Face transformers.
+# Enable with SUBJECTIVE_BACKEND=transformers. Falls back to the offline lexicon encoder if unavailable.
+-r requirements.txt
+transformers>=4.40         # Hugging Face Transformers (Apache-2.0)

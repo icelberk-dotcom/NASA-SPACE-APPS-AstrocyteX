@@ -1,0 +1,4 @@
+# Dependencies of the TEKNOFEST ECG analyser package when it is launched by the ECG adapter
+# with the same interpreter (otherwise point ECG_PYTHON to the interpreter that already has them).
+-r requirements.txt
+Flask>=2.2                 # Flask (BSD-3-Clause)

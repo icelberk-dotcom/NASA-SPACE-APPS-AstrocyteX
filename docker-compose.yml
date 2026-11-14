@@ -1,0 +1,22 @@
+# docker compose up --build   ->  API http://localhost:8000/docs   UI http://localhost:8501
+services:
+  api:
+    build: .
+    command: ["python", "run.py", "api"]
+    env_file: [.env]
+    environment:
+      ASTROGUARD_DB: /app/data/astroguard.db
+      ASTROGUARD_CORS: http://localhost:8501
+    ports: ["8000:8000"]
+    volumes: ["astroguard-data:/app/data"]
+    # To use the TEKNOFEST ECG package, mount it and set ECG_PACKAGE_PATH=/ecg in .env, e.g.:
+    #   volumes: ["./external/ecg_package:/ecg:ro", "astroguard-data:/app/data"]
+  ui:
+    build: .
+    command: ["python", "-m", "streamlit", "run", "ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    environment:
+      ASTROGUARD_API_URL: http://api:8000
+    ports: ["8501:8501"]
+    depends_on: [api]
+volumes:
+  astroguard-data:

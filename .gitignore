@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+# Secrets & local config
+.env
+# Local data & trained weights (reproducible with `python -m models.train`)
+data/*.db
+data/*.db-*
+data/*.log
+data/_*
+checkpoints/*.pt
+# Large third-party ECG package / weights are NOT part of this repository
+external/
+ecg_package/
+*.ckpt
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+"""
+AstroGuard-X launcher.
+
+    python run.py ui      Streamlit dashboard (backend in-process)          http://localhost:8501
+    python run.py api     FastAPI REST backend                              http://localhost:8000/docs
+    python run.py all     REST backend + dashboard talking to it
+    python run.py train   (re)train the risk model on simulated crews
+    python run.py test    run the unit tests
+    python run.py ecg     check the ECG-analyser integration
+"""
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+PY = sys.executable
+
+
+def _run(cmd: list[str], env: dict | None = None) -> int:
+    return subprocess.call(cmd, cwd=ROOT, env={**os.environ, **(env or {})})
+
+
+def main() -> int:
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "ui"
+    extra = sys.argv[2:]
+    if cmd == "ui":
+        return _run([PY, "-m", "streamlit", "run", "ui/app.py", *extra])
+    if cmd == "api":
+        return _run([PY, "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", *extra])
+    if cmd == "all":
+        api = subprocess.Popen([PY, "-m", "uvicorn", "backend.main:app", "--port", "8000"], cwd=ROOT)
+        try:
+            time.sleep(3)
+            return _run([PY, "-m", "streamlit", "run", "ui/app.py", *extra], env={"ASTROGUARD_API_URL": "http://127.0.0.1:8000"})
+        finally:
+            api.terminate()
+    if cmd == "train":
+        return _run([PY, "-m", "models.train", *extra])
+    if cmd == "test":
+        return _run([PY, "-m", "pytest", "-q", *extra])
+    if cmd == "ecg":
+        code = ("from backend.ecg_adapter import ECGAdapter; a=ECGAdapter(); print(a.status()); "
+                "r=a.sample('AFIB'); print(r.source, r.class_code, r.heart_rate, r.abnormal_probability_pct)")
+        return _run([PY, "-c", code])
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
