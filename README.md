@@ -35,8 +35,8 @@ the crew member earns XP, levels, streaks and badges for completing them.
 | **Neural stack** | Mamba-2 · TCN + TFT · environment encoder + FiLM · cross-attention fusion · Neural ODE + PINN · Bayesian uncertainty |
 | **ECG adapter** | Plug-in for the **TEKNOFEST V23 ECG analyser** (10-class, 12-lead) with offline screening fallback |
 | **Edge-first** | Everything works without internet; Gemini is optional and guarded by a circuit breaker |
-| **Bilingual UI** | English / Türkçe |
-| **Two deployment modes** | Single-process Streamlit, or FastAPI backend + Streamlit (Docker Compose) |
+| **Cosmic Glass Web UI** | Interactive starry-sky SPA (`web/`: Home · Overall Health ▾ sub-screens · Diet Stock & 0–100 % Portion Slider · Diet History · Space Radiation · Exercise · Biochemical · Cardiovascular & 12-lead ECG · Experiments · Progress · Rewards · Türkçe / English / Русский) + classic Streamlit mode |
+| **Two deployment modes** | Unified FastAPI + Cosmic Web UI (`run.py ui`), or FastAPI + Streamlit (Docker Compose) |
 
 ## Architecture
 
@@ -86,8 +86,9 @@ cd NASA-space-apps-Ondankoymacano
 
 # Windows - creates .venv, installs deps, trains the compact model, runs tests, initialises git
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
-.\.venv\Scripts\python.exe run.py ui          # dashboard  -> http://localhost:8501
-.\.venv\Scripts\python.exe run.py api         # REST API   -> http://localhost:8000/docs
+.\.venv\Scripts\python.exe run.py ui          # Cosmic Web UI + API -> http://localhost:8501
+.\.venv\Scripts\python.exe run.py streamlit   # Classic Streamlit   -> http://localhost:8501
+.\.venv\Scripts\python.exe run.py api         # Headless REST API   -> http://localhost:8000/docs
 ```
 
 ```bash
@@ -227,12 +228,13 @@ AstroGuard-X/
 │   ├── train.py           GPU training: EMA, ordinal band loss, early stopping on validation MCC
 │   ├── metrics.py         MCC / macro-F1 / QWK / safety metrics + crew-day bootstrap
 │   └── evaluate.py        held-out test, baselines, ablation, slices → docs/MODEL_EVALUATION.md
-├── ui/                    Streamlit dashboard (app.py, components.py, theme.py, i18n.py, client.py)
+├── web/                   Astrocyte X · AstroGuard-X Cosmic Glass SPA (index.html, styles.css, app.js, diet_experiments.js, i18n.js)
+├── ui/                    Classic Streamlit dashboard (app.py, components.py, theme.py, i18n.py, client.py)
 ├── utils/                 reference_ranges.py · environment.py · features.py · synthetic_data.py · subjective.py · telemetry.py · ecg_synth.py · config.py
 ├── docs/                  MODEL_EVALUATION.md · model_evaluation.json · img/ · ABOUT_UI.md · ci.yml
-├── scripts/               setup.ps1 · setup.sh · publish_github.ps1 · publish_github.sh · git_init_fallback.py
+├── scripts/               generate_word_report.py · setup.ps1 · setup.sh · publish_github.ps1 · publish_github.sh · git_init_fallback.py
 ├── tests/                 pytest suite (models, ranges, environment, metrics, gamification, service, API, ECG, UI)
-├── run.py                 launcher (ui | api | all | train | evaluate | test | ecg)
+├── run.py                 launcher (ui | web | streamlit | api | all | train | evaluate | test | ecg)
 ├── requirements*.txt · Dockerfile · docker-compose.yml · .env.example · LICENSE · THIRD_PARTY_NOTICES.md
 ```
 

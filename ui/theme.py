@@ -9,15 +9,17 @@ from utils.reference_ranges import LEVEL_INFO
 
 CSS = """
 <style>
-:root { --ag-card: rgba(255,255,255,0.045); --ag-border: rgba(255,255,255,0.10); }
-.stApp { background: radial-gradient(1200px 600px at 10% -10%, #1b2a4a 0%, rgba(14,17,23,0) 60%),
-                      radial-gradient(900px 500px at 100% 0%, #2a1b4a 0%, rgba(14,17,23,0) 55%), #0e1117; }
-h1, h2, h3 { letter-spacing: .2px; }
+:root { --ag-card: rgba(14,28,68,0.68); --ag-border: rgba(165,198,255,0.24); }
+.stApp { background: radial-gradient(1100px 600px at 12% -10%, rgba(78,125,255,0.22) 0%, transparent 60%),
+                      radial-gradient(900px 520px at 92% 5%, rgba(140,92,255,0.16) 0%, transparent 58%),
+                      linear-gradient(to bottom, #08122e 0%, #11214d 55%, #1a3068 100%); }
+[data-testid="stSidebar"] { background: rgba(8,17,44,0.92); border-right: 1px solid rgba(165,198,255,0.22); }
+h1, h2, h3 { letter-spacing: .3px; text-shadow: 0 0 16px rgba(150,185,255,0.35); }
 .ag-hero { padding: 6px 0 10px 0; }
-.ag-hero h1 { font-size: 2.1rem; margin: 0; background: linear-gradient(90deg,#8ab4f8,#c58af9); -webkit-background-clip: text;
+.ag-hero h1 { font-size: 2.15rem; margin: 0; background: linear-gradient(90deg,#ffffff,#9ec5ff,#c58af9); -webkit-background-clip: text;
               -webkit-text-fill-color: transparent; }
-.ag-hero p { margin: 0; color: #9aa0a6; }
-.ag-card { background: var(--ag-card); border: 1px solid var(--ag-border); border-radius: 14px; padding: 12px 14px; }
+.ag-hero p { margin: 0; color: #b8cde8; }
+.ag-card { background: var(--ag-card); border: 1px solid var(--ag-border); border-radius: 14px; padding: 12px 14px; backdrop-filter: blur(8px); }
 .ag-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; margin-right: 8px;
           border: 1px solid rgba(255,255,255,.25); flex: 0 0 auto; }
 .ag-dot.gray   { background: #9aa0a6; }

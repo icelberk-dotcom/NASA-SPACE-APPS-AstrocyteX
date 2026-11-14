@@ -73,3 +73,23 @@ def test_ecg_endpoints_use_builtin_fallback(client):
     assert client.get("/ecg/sample/AFIB").json()["rr_regularity"] == "irregular"
     assert client.post("/ecg/analyze", files={"file": ("rec.xyz", b"123")}).status_code == 422
     assert client.get("/ecg/status").json()["mode"] == "builtin-screening"
+
+
+def test_web_ui_and_preset_endpoints(client):
+    home = client.get("/")
+    assert home.status_code == 200 and "Astrocyte X" in home.text and "overall-health" in home.text
+    assert client.get("/static/styles.css").status_code == 200
+    assert client.get("/static/app.js").status_code == 200
+    assert client.get("/static/diet_experiments.js").status_code == 200
+
+    p = client.get("/presets").json()
+    assert "dehydration" in p["scenarios"] and "iss_leo" in p["profiles"] and len(p["initial_sensor_series"]["heart_rate"]) == 96
+
+    sb = client.get("/presets/scenario/dehydration?lang=tr").json()
+    assert sb["values"]["fluid_intake_ml"] < 1500 and len(sb["sensor_series"]["spo2"]) == 96
+
+    ev = client.post("/environment/apply-event", json={"values": p["default_values"], "event": "solar_particle_event", "lang": "tr"}).json()
+    assert ev["values"]["radiation_dose_msv_d"] > 20.0 and ev["log"]
+
+    ts = client.post("/telemetry/simulate", json={"values": {"heart_rate": 85.0}}).json()
+    assert len(ts["sensor_series"]["heart_rate"]) == 96 and "heart_rate" in ts["latest"]

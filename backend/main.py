@@ -11,17 +11,20 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.gamification import BADGES
 from backend.schemas import Assessment, CompletionResult, GamificationState, ReadingIn, TaskOut
 from backend.service import AstroGuardService, get_service
-from utils.config import get_settings
-from utils.reference_ranges import CATEGORIES, LEVELS, PARAMETERS
+from utils.config import PROJECT_ROOT, get_settings
+from utils.reference_ranges import CATEGORIES, DEFAULT_VALUES, ENV_KEYS, LEVELS, PARAMETERS, SEQ_KEYS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
@@ -47,6 +50,29 @@ def svc() -> AstroGuardService:
 
 class ChatIn(BaseModel):
     question: str
+
+
+class EventApplyIn(BaseModel):
+    values: Dict[str, float] = {}
+    event: str
+    lang: str = "en"
+
+
+class TelemetrySimIn(BaseModel):
+    values: Dict[str, float] = {}
+
+
+WEB_DIR: Path = PROJECT_ROOT / "web"
+if WEB_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
+
+
+@app.get("/", include_in_schema=False, response_model=None)
+def web_root():
+    index_file = WEB_DIR / "index.html"
+    if index_file.is_file():
+        return FileResponse(index_file)
+    return HTMLResponse("<h1>AstroGuard-X API</h1><p>See <a href='/docs'>/docs</a></p>")
 
 
 # ----------------------------------------------------------------------- meta
@@ -79,6 +105,62 @@ def environment_profiles(mission_day: float = Query(90.0, ge=0, le=1500)) -> Dic
         profiles[name] = {"en": prof["en"], "tr": prof["tr"], "values": vals, "derived": derived_environment(vals)}
     return {"mission_day": mission_day, "profiles": profiles,
             "events": {k: {"en": v["en"], "tr": v["tr"]} for k, v in ENV_EVENTS.items()}}
+
+
+@app.get("/presets", tags=["meta"])
+def presets(mission_day: float = Query(90.0, ge=0, le=1500)) -> Dict[str, Any]:
+    """UI bootstrap bundle: defaults, clinical scenarios, mission profiles, events & initial 24h sensor stream."""
+    from utils.synthetic_data import SCENARIO_NAMES
+    from utils.telemetry import TelemetrySimulator
+
+    env_bundle = environment_profiles(mission_day)
+    sim = TelemetrySimulator({k: DEFAULT_VALUES[k] for k in SEQ_KEYS}, seed=7)
+    sim.fill()
+    return {
+        "default_values": DEFAULT_VALUES,
+        "scenarios": [s for s in SCENARIO_NAMES if s != "mixed"],
+        "profiles": env_bundle["profiles"],
+        "events": env_bundle["events"],
+        "initial_sensor_series": sim.series(),
+    }
+
+
+@app.get("/presets/scenario/{scenario_name}", tags=["meta"])
+def scenario_bundle(scenario_name: str, lang: str = Query("en", pattern="^(en|tr)$")) -> Dict[str, Any]:
+    from utils.synthetic_data import SCENARIOS, scenario_log, scenario_preset
+    from utils.telemetry import TelemetrySimulator
+
+    if scenario_name not in SCENARIOS:
+        raise HTTPException(status_code=404, detail=f"Unknown scenario: {scenario_name}")
+    vals = scenario_preset(scenario_name)
+    sim = TelemetrySimulator({k: vals.get(k, DEFAULT_VALUES[k]) for k in SEQ_KEYS})
+    sim.fill()
+    return {"scenario": scenario_name, "values": vals, "subjective_log": scenario_log(scenario_name, lang),
+            "sensor_series": sim.series()}
+
+
+@app.post("/environment/apply-event", tags=["meta"])
+def apply_environment_event(body: EventApplyIn) -> Dict[str, Any]:
+    from utils.environment import ENV_EVENTS, apply_event, derived_environment, event_log
+
+    if body.event not in ENV_EVENTS:
+        raise HTTPException(status_code=404, detail=f"Unknown event: {body.event}")
+    cur = {k: float(body.values.get(k, DEFAULT_VALUES[k])) for k in ENV_KEYS}
+    updated = apply_event(cur, body.event)
+    lang_norm = "tr" if body.lang == "tr" else "en"
+    return {"values": updated, "derived": derived_environment(updated), "log": event_log(body.event, lang_norm)}
+
+
+@app.post("/telemetry/simulate", tags=["meta"])
+def simulate_telemetry(body: TelemetrySimIn) -> Dict[str, Any]:
+    from utils.telemetry import TelemetrySimulator
+
+    base = {k: float(body.values.get(k, DEFAULT_VALUES[k])) for k in SEQ_KEYS}
+    sim = TelemetrySimulator(base)
+    sim.fill()
+    series = sim.series()
+    latest_vals = {k: round(series[k][-1], 2) for k in SEQ_KEYS if series.get(k)}
+    return {"sensor_series": series, "latest": latest_vals}
 
 
 # ------------------------------------------------------------------ assessment

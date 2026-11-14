@@ -2,8 +2,9 @@
 """
 AstroGuard-X launcher.
 
-    python run.py ui      Streamlit dashboard (backend in-process)          http://localhost:8501
-    python run.py api     FastAPI REST backend                              http://localhost:8000/docs
+    python run.py ui         Astrocyte X · AstroGuard-X cosmic web UI + API    http://localhost:8501
+    python run.py streamlit  Classic Streamlit dashboard                       http://localhost:8502
+    python run.py api        FastAPI REST + web backend                        http://localhost:8000/docs
     python run.py all     REST backend + dashboard talking to it
     python run.py train   (re)train the risk model on simulated crews (GPU if available)
     python run.py evaluate  held-out test (MCC, macro-F1, QWK, safety metrics) -> docs/MODEL_EVALUATION.md
@@ -29,7 +30,9 @@ def _run(cmd: list[str], env: dict | None = None) -> int:
 def main() -> int:
     cmd = sys.argv[1] if len(sys.argv) > 1 else "ui"
     extra = sys.argv[2:]
-    if cmd == "ui":
+    if cmd in ("ui", "web"):
+        return _run([PY, "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8501", *extra])
+    if cmd == "streamlit":
         return _run([PY, "-m", "streamlit", "run", "ui/app.py", *extra])
     if cmd == "api":
         return _run([PY, "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", *extra])
