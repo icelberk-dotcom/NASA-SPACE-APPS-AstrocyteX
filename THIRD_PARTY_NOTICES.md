@@ -36,6 +36,16 @@ the respective projects at the time of writing - please check them upstream.
 * A. Kendall, Y. Gal. *What Uncertainties Do We Need in Bayesian Deep Learning for Computer Vision?*, NeurIPS 2017.
 * P. E. McSharry et al. *A dynamical model for generating synthetic electrocardiogram signals*, IEEE TBME 2003 (synthetic ECG demo signal).
 * NASA Human Research Program evidence reports and NASA-STD-3001 (reference ranges, bone/muscle/fluid-shift trends).
+* E. Perez, F. Strub, H. de Vries, V. Dumoulin, A. Courville. *FiLM: Visual Reasoning with a General Conditioning Layer*, AAAI 2018 (environment conditioning).
+* NASA Human Research Program, *The Human Body in Space* / five hazards of human spaceflight ("RIDGE": radiation, isolation & confinement,
+  distance from Earth, gravity fields, hostile/closed environments); NASA-STD-3001 Vol. 2 (cabin CO₂, noise, radiation exposure limits);
+  D. M. Hassler et al. *Mars' surface radiation environment measured with the Mars Science Laboratory's Curiosity rover*, Science 2014;
+  C. Zeitlin et al. *Measurements of energetic particle radiation in transit to Mars on the MSL*, Science 2013 (illustrative dose rates).
+* B. W. Matthews, *Comparison of the predicted and observed secondary structure of T4 phage lysozyme*, BBA 1975 and
+  J. Gorodkin, *Comparing two K-category assignments by a K-category correlation coefficient*, Comput. Biol. Chem. 2004 (MCC);
+  J. Cohen, *Weighted kappa*, Psychol. Bull. 1968 (quadratic weighted kappa);
+  W. Cao, V. Mirjalili, S. Raschka, *Rank consistent ordinal regression for neural networks* (CORAL), Pattern Recognit. Lett. 2020 (ordinal band loss);
+  B. T. Polyak, A. B. Juditsky, *Acceleration of stochastic approximation by averaging*, SIAM J. Control Optim. 1992 (weight averaging / EMA).
 
 ## TEKNOFEST ECG analyser (not redistributed)
 

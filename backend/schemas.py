@@ -13,14 +13,15 @@ from pydantic import BaseModel, Field
 
 # ------------------------------------------------------------------------- inputs
 class ReadingIn(BaseModel):
-    """One snapshot of an astronaut's data (any subset of the 31 parameters)."""
+    """One snapshot of an astronaut's data (any subset of the 43 parameters: 31 physiological + 12 environment)."""
 
     values: Dict[str, float] = Field(default_factory=dict, description="parameter key -> value in its unit")
     sensor_series: Optional[Dict[str, List[float]]] = Field(
         default=None, description="optional recent high-rate stream per continuous sensor (newest last)")
     subjective_log: str = Field(default="", max_length=4000, description="free-text log (EN/TR)")
     mission_day: float = Field(default=0.0, ge=0, le=1500)
-    gravity: float = Field(default=0.0, ge=0, le=1.0, description="0 = microgravity, 1 = Earth")
+    gravity: float = Field(default=0.0, ge=0, le=1.0,
+                           description="0 = microgravity, 1 = Earth (used only if values has no 'gravity_g')")
     ecg: Optional[Dict[str, Any]] = Field(default=None, description="ECGResult dict to merge (optional)")
     save: bool = True
 
@@ -126,6 +127,9 @@ class Assessment(BaseModel):
     modality_attention: Dict[str, float]
     trend_drivers: List[Dict[str, Any]]
     ecg: Optional[Dict[str, Any]] = None
+    environment: Dict[str, Any] = Field(default_factory=dict,
+                                        description="space-environment hazard index, RIDGE themes, derived values and "
+                                                    "the counterfactual environmental risk uplift")
     advisor: Dict[str, Any]
     new_tasks: List[TaskOut]
     subjective_symptoms: List[str] = Field(default_factory=list)

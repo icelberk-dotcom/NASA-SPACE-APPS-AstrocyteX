@@ -1,11 +1,15 @@
 ### About AstroGuard-X
 
-**AstroGuard-X** is an AI-powered astronaut health-monitoring prototype with a built-in gamified
-mitigation system, created for the **NASA Space Apps Challenge**.
+**AstroGuard-X (v2)** is an AI-powered astronaut health & space-environment monitoring prototype with a built-in
+gamified mitigation system, created for the **NASA Space Apps Challenge**.
 
-**Pipeline** — Mamba-2 (continuous sensors) · TCN + Temporal Fusion Transformer (multi-day trends) ·
-cross-attention multimodal fusion (sensors + daily inputs + subjective log) · Neural ODE + PINN
-(fluid shift, bone & muscle dynamics) · Bayesian uncertainty head · Gemini reasoning (offline fallback) ·
+**43 Parameters** — **31 physiological** biomarkers (continuous wearables + daily clinical inputs) plus **12 NASA
+spaceflight hazard** inputs across the five RIDGE themes (*radiation · isolation & confinement · distance from Earth ·
+gravity fields · hostile closed environments*).
+
+**Pipeline** — Mamba-2 (continuous sensors) · TCN + Temporal Fusion Transformer (14-day 43-variable trends) ·
+Environment Encoder + FiLM modulation (12 hazards) · 5-modality cross-attention fusion · Neural ODE + PINN
+(fluid shift, bone & muscle dynamics driven by gravity) · Bayesian uncertainty head · Gemini reasoning (offline fallback) ·
 TEKNOFEST V23 ECG analyser.
 
 **How to read the colours** — ⚪ gray < 15 % baseline · 🟢 green 15–40 % normal · 🟡 yellow 40–70 % minor deviation ·

@@ -177,17 +177,94 @@ LIBRARY: Dict[str, Dict[str, List[Template]]] = {
         "high": [_HYDRATE, _SURGEON],
         "low": [("Avoid activities with bruising or bleeding risk", "Handle tools carefully and report any bleeding.", 2, "medical"), _SURGEON],
     },
+    # ======================= space-environment hazards (RIDGE) =======================
+    "radiation_dose_msv_d": {
+        "high": [("Move to the radiation storm shelter", "Go to the most shielded area (e.g. crew quarters lined with water/stowage "
+                  "bags) and stay there until the dose rate drops; postpone EVAs.", 30, "radiation"),
+                 ("Log your personal dosimeter reading", "Read the active dosimeter, log the value and report it to the ground "
+                  "or the on-board medical officer.", 5, "radiation")],
+        "low": [],
+    },
+    "radiation_cumulative_msv": {
+        "high": [("Review your radiation dose budget with the flight surgeon", "Compare the cumulative dose with the mission "
+                  "and career limits and agree on EVA / shielding plans.", 10, "radiation"),
+                 ("Sleep in the shielded crew quarters", "Use the best-shielded sleep station to reduce the daily dose.", 5, "radiation")],
+        "low": [],
+    },
+    "isolation_days": {
+        "high": [("Schedule a private family conference", "Book a private video or voice call with family or friends.", 20, "wellbeing"),
+                 ("Plan a shared crew meal or movie night", "Social time with the crew counters isolation-related stress.", 30, "wellbeing")],
+        "low": [],
+    },
+    "habitable_volume_m3": {
+        "low": [("Take a 15-minute privacy break in your crew quarters", "Close the curtain/door, put on music and decompress "
+                 "alone.", 15, "wellbeing"),
+                ("Re-organise stowage to free up personal space", "Move non-essential items out of the work and sleep areas.", 20, "environment")],
+        "high": [],
+    },
+    "earth_distance_mkm": {
+        "high": [("Review the autonomous medical checklist", "Refresh the on-board medical procedures you may need to perform "
+                  "without real-time ground support.", 15, "medical"),
+                 ("Run an offline medical-kit inventory check", "Verify supplies and expiry dates; communication delays mean the "
+                  "crew must be self-sufficient.", 15, "monitoring")],
+        "low": [],
+    },
+    "gravity_g": {
+        "low": [_ARED, _TREADMILL,
+                ("Wear the lower-body loading / thigh-cuff garment as scheduled", "Use the prescribed countermeasure garment to "
+                 "limit fluid shift and deconditioning.", 30, "exercise")],
+        "high": [],
+    },
+    "g_transition_days": {
+        "low": [("Fluid-load before standing: drink 1 L of electrolyte water", "Rehydrate with an isotonic drink to support blood "
+                 "pressure after the gravity transition.", 20, "hydration"),
+                ("Move slowly; sit or lie down if you feel dizzy", "Rise in stages and avoid sudden head movements while your "
+                 "balance and blood pressure re-adapt.", 5, "recovery")],
+        "high": [],
+    },
+    "cabin_co2_mmhg": {
+        "high": [("Check the CO2 scrubber and increase ventilation", "Confirm scrubber (CDRA) status, position a fan near your "
+                  "work/sleep station and move to a well-ventilated module.", 10, "environment"),
+                 ("Take a 10-minute break in a well-ventilated module", "CO2 pockets form without convection in microgravity.", 10, "environment")],
+        "low": [],
+    },
+    "cabin_o2_kpa": {
+        "low": [("Check ppO2 and follow the low-oxygen protocol", "Verify the O2 sensor, report to the ground and don an oxygen "
+                 "mask if the protocol requires it.", 5, "environment"), _SURGEON],
+        "high": [("Verify O2 partial pressure and remove ignition sources", "High ppO2 raises flammability - check the reading and "
+                  "secure ignition sources.", 10, "environment")],
+    },
+    "cabin_temp_c": {
+        "high": [("Lower the module temperature setpoint", "Adjust the thermal control setpoint, increase airflow and drink cool "
+                  "water.", 10, "environment"), _COOL],
+        "low": [("Raise the module temperature setpoint and add a layer", "Increase the heater setpoint and put on warm clothing.", 10, "environment")],
+    },
+    "cabin_humidity_pct": {
+        "high": [("Check the humidity separator and wipe condensation", "Excess humidity promotes microbial growth; clean wet "
+                  "surfaces and report the reading.", 15, "environment")],
+        "low": [("Hydrate and protect your airways from dry air", "Drink water regularly and use the moisturising kit for eyes and "
+                 "nose.", 5, "hydration")],
+    },
+    "cabin_noise_dba": {
+        "high": [("Wear hearing protection during sleep and noisy work", "Use earplugs or noise-cancelling headphones and log the "
+                  "noise dosimeter reading.", 5, "environment"),
+                 _SLEEP_WIND],
+        "low": [],
+    },
 }
 
 # Canonical tags (drive the badges). Anything else coming from an LLM is normalised to one of these.
 ALLOWED_TAGS = {"hydration", "exercise", "breathing", "sleep", "nutrition", "wellbeing", "ecg", "medical", "monitoring",
-                "environment", "cooling", "recovery", "hygiene", "general"}
+                "environment", "radiation", "cooling", "recovery", "hygiene", "general"}
 _TAG_SYNONYMS = {"beslenme": "nutrition", "diyet": "nutrition", "sıvı": "hydration", "su": "hydration", "nefes": "breathing",
                  "egzersiz": "exercise", "spor": "exercise", "uyku": "sleep", "dinlenme": "recovery", "iyilik": "wellbeing",
                  "ekg": "ecg", "tıbbi": "medical", "doktor": "medical", "ölçüm": "monitoring", "izleme": "monitoring",
-                 "çevre": "environment", "soğutma": "cooling", "hijyen": "hygiene", "stres": "wellbeing", "rest": "recovery",
+                 "çevre": "environment", "ortam": "environment", "habitat": "environment", "kabin": "environment",
+                 "radyasyon": "radiation", "radiat": "radiation", "dosim": "radiation", "shelter": "radiation",
+                 "soğutma": "cooling", "hijyen": "hygiene", "stres": "wellbeing", "rest": "recovery",
                  "diet": "nutrition", "water": "hydration", "fluid": "hydration", "breath": "breathing", "workout": "exercise",
-                 "mental": "wellbeing", "stretching": "recovery", "measurement": "monitoring"}
+                 "mental": "wellbeing", "stretching": "recovery", "measurement": "monitoring", "isolation": "wellbeing",
+                 "izolasyon": "wellbeing", "ventilation": "environment"}
 
 
 def normalize_tag(tag: str, fallback: str = "general") -> str:
@@ -204,6 +281,12 @@ CRITICAL_TASK: Template = (
     "Contact the flight surgeon NOW and follow the emergency protocol",
     "This value is in the immediate-intervention zone. Stop non-essential work, open the medical channel, "
     "report the reading and follow instructions.", 5, "medical")
+
+# Black-level *environment* hazard (e.g. a severe solar particle event or a cabin-air emergency).
+ENV_CRITICAL_TASK: Template = (
+    "Alert mission control and start the hazard emergency procedure",
+    "This environment hazard is in the immediate-intervention zone. Follow the emergency procedure for it "
+    "(radiation shelter, mask / ventilation, thermal or pressure response) and report to mission control.", 5, "environment")
 
 
 def templates_for(param_key: str, direction: str) -> List[Template]:

@@ -3,15 +3,16 @@ Feature engineering: raw readings -> normalised tensors for the neural networks.
 
 Shapes (B = batch):
     seq      (B, SEQ_LEN, 7)    continuous sensor window (Mamba-2 branch)
-    daily    (B, 24)            daily inputs / lab values (fusion tokens)
-    history  (B, HIST_LEN, 31)  last two weeks of *all* parameters (TCN + TFT branch)
+    daily    (B, 36)            24 daily health inputs / labs + 12 space-environment hazards
+                                (the fusion network splits them by position: health | environment)
+    history  (B, HIST_LEN, 43)  last two weeks of *all* parameters (TCN + TFT branch)
     subj     (B, SUBJ_DIM)      encoded subjective log
     mission  (B, 1)             mission day / 180 (physics ODE initial state)
     controls (B, 4)             [gravity, exercise effect, protein adequacy, hydration] (ODE inputs)
 
 Everything is z-scored against the reference ranges in ``reference_ranges.py`` so the
-network sees "how many half-normal-widths away from ideal" a value is.  That makes
-the model unit-independent and keeps training stable.
+network sees "how many z-scale units away from ideal" a value is.  That makes the model
+unit-independent and keeps training stable.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from typing import Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
 
-from utils.reference_ranges import (DAILY_KEYS, DEFAULT_VALUES, PARAM_KEYS, SEQ_KEYS,
+from utils.reference_ranges import (DAILY_HEALTH_KEYS, DAILY_KEYS, DEFAULT_VALUES, ENV_KEYS, PARAM_KEYS, SEQ_KEYS,
                                     normalize_value)
 from utils.subjective import SUBJ_DIM
 
@@ -27,6 +28,8 @@ SEQ_LEN = 96  # e.g. 96 samples of the wearable stream (one per 5 min = 8 h)
 HIST_LEN = 14  # two weeks of daily history for the trend branch
 N_SEQ = len(SEQ_KEYS)
 N_DAILY = len(DAILY_KEYS)
+N_DAILY_HEALTH = len(DAILY_HEALTH_KEYS)
+N_ENV = len(ENV_KEYS)
 N_PARAMS = len(PARAM_KEYS)
 N_CONTROLS = 4
 MAX_MISSION_DAYS = 180.0

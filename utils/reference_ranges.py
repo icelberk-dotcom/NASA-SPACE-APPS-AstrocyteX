@@ -2,7 +2,7 @@
 Reference ranges and the percentage-based risk scale for every monitored parameter.
 
 This module is the single source of truth for:
-  * which parameters AstroGuard-X monitors (31 of them),
+  * which parameters AstroGuard-X monitors (31 physiological + 12 space-environment = 43),
   * their normal / caution / danger limits,
   * how a raw value is converted into a 0-100 % risk score,
   * how a risk score maps to the coloured indicator (gray/green/yellow/red/black).
@@ -89,19 +89,31 @@ def level_color(level: str) -> str:
 # --------------------------------------------------------------------------- #
 
 # Categories group parameters in the UI and act as "physiological systems" when
-# the pipeline aggregates risk per system.
+# the pipeline aggregates risk per system.  ``group`` separates the astronaut's own
+# physiology ("health") from the hazards of the space environment ("environment").
+# The five environment categories follow NASA's Human Research Program "RIDGE" hazard
+# model: Radiation, Isolation & confinement, Distance from Earth, Gravity fields and
+# hostile/closed Environments.
 CATEGORIES: Dict[str, Dict[str, str]] = {
-    "cardiovascular": {"en": "Cardiovascular", "tr": "Kardiyovasküler", "icon": "🫀"},
-    "respiratory": {"en": "Respiratory", "tr": "Solunum", "icon": "🫁"},
-    "stress_thermal": {"en": "Stress & Thermoregulation", "tr": "Stres ve Isı Düzenleme", "icon": "🌡️"},
-    "sleep_activity": {"en": "Sleep & Exercise", "tr": "Uyku ve Egzersiz", "icon": "😴"},
-    "hydration_renal": {"en": "Hydration & Renal", "tr": "Sıvı ve Böbrek", "icon": "💧"},
-    "bone_muscle": {"en": "Bone & Muscle", "tr": "Kemik ve Kas", "icon": "🦴"},
-    "hemogram": {"en": "Hemogram (CBC)", "tr": "Hemogram", "icon": "🩸"},
-    "biochemistry": {"en": "Blood Biochemistry", "tr": "Kan Biyokimyası", "icon": "🧪"},
-    "nutrition": {"en": "Nutrition & Diet", "tr": "Beslenme ve Diyet", "icon": "🥗"},
-    "ecg": {"en": "ECG", "tr": "EKG", "icon": "📈"},
+    "cardiovascular": {"en": "Cardiovascular", "tr": "Kardiyovasküler", "icon": "🫀", "group": "health"},
+    "respiratory": {"en": "Respiratory", "tr": "Solunum", "icon": "🫁", "group": "health"},
+    "stress_thermal": {"en": "Stress & Thermoregulation", "tr": "Stres ve Isı Düzenleme", "icon": "🌡️", "group": "health"},
+    "sleep_activity": {"en": "Sleep & Exercise", "tr": "Uyku ve Egzersiz", "icon": "😴", "group": "health"},
+    "hydration_renal": {"en": "Hydration & Renal", "tr": "Sıvı ve Böbrek", "icon": "💧", "group": "health"},
+    "bone_muscle": {"en": "Bone & Muscle", "tr": "Kemik ve Kas", "icon": "🦴", "group": "health"},
+    "hemogram": {"en": "Hemogram (CBC)", "tr": "Hemogram", "icon": "🩸", "group": "health"},
+    "biochemistry": {"en": "Blood Biochemistry", "tr": "Kan Biyokimyası", "icon": "🧪", "group": "health"},
+    "nutrition": {"en": "Nutrition & Diet", "tr": "Beslenme ve Diyet", "icon": "🥗", "group": "health"},
+    "ecg": {"en": "ECG", "tr": "EKG", "icon": "📈", "group": "health"},
+    # ---- space-environment hazards (NASA HRP "RIDGE") ----------------------------------
+    "radiation": {"en": "Space Radiation", "tr": "Uzay Radyasyonu", "icon": "☢️", "group": "environment"},
+    "isolation": {"en": "Isolation & Confinement", "tr": "İzolasyon ve Kapalı Kalma", "icon": "🔒", "group": "environment"},
+    "distance": {"en": "Distance from Earth", "tr": "Dünya'dan Uzaklık", "icon": "🌍", "group": "environment"},
+    "gravity": {"en": "Gravity Fields", "tr": "Yerçekimi Alanları", "icon": "🪐", "group": "environment"},
+    "habitat": {"en": "Hostile / Closed Environment", "tr": "Zorlu / Kapalı Ortam", "icon": "🌫️", "group": "environment"},
 }
+HEALTH_CATEGORIES: List[str] = [k for k, v in CATEGORIES.items() if v["group"] == "health"]
+ENV_CATEGORIES: List[str] = [k for k, v in CATEGORIES.items() if v["group"] == "environment"]
 
 
 @dataclass(frozen=True)
@@ -111,7 +123,7 @@ class Parameter:
     name_tr: str
     unit: str
     category: str
-    kind: str  # "continuous" (sensor stream) or "daily" (daily entry / lab test)
+    kind: str  # "continuous" (sensor stream), "daily" (daily entry / lab test) or "environment" (space hazard)
     ideal: float
     normal: Tuple[Optional[float], Optional[float]]
     warn: Tuple[Optional[float], Optional[float]]
@@ -225,7 +237,65 @@ _RAW_PARAMETERS: List[Parameter] = [
        6.5, (4.0, 10.5), (3.0, 13.0), (1.5, 25.0), (0.5, 50.0, 0.1), 1),
     _P("platelets_k", "Platelets", "Trombosit", "10³/µL", "hemogram", "daily",
        250, (150, 400), (110, 480), (50, 800), (10, 1200, 5)),
+    # ================= SPACE-ENVIRONMENT HAZARDS (must stay at the END of the list) =================
+    # These describe the *environment*, not the body.  Their own risk % is a hazard level;
+    # the neural network learns how each hazard raises the risk of the physiological
+    # parameters (e.g. high cabin CO2 -> respiratory rate, solar particle event -> blood
+    # counts, distance from Earth -> less medical support for anything already abnormal).
+    # ---- radiation ------------------------------------------------------------------
+    _P("radiation_dose_msv_d", "Radiation dose rate", "Radyasyon Doz Hızı", "mSv/day", "radiation", "environment",
+       0.05, (None, 1.0), (None, 3.0), (None, 20.0), (0.0, 200.0, 0.05), 2,
+       "Personal dosimeter. ISS ~0.5, interplanetary cruise ~1.8 mSv/day; solar particle events can reach "
+       "tens to hundreds of mSv in hours."),
+    _P("radiation_cumulative_msv", "Cumulative mission dose", "Kümülatif Görev Dozu", "mSv", "radiation", "environment",
+       0.0, (None, 150.0), (None, 350.0), (None, 600.0), (0.0, 3000.0, 5.0), 0,
+       "Effective dose accumulated so far. 600 mSv is NASA's career exposure limit (NASA-STD-3001, 2022)."),
+    # ---- isolation & confinement ------------------------------------------------------
+    _P("isolation_days", "Isolation & confinement duration", "İzolasyon ve Kapalı Kalma Süresi", "days", "isolation",
+       "environment", 0.0, (None, 90.0), (None, 180.0), (None, 365.0), (0.0, 1500.0, 1.0), 0,
+       "Days in an isolated, confined environment (incl. pre-flight quarantine). Behavioural-health risk "
+       "('third-quarter phenomenon') grows with duration."),
+    _P("habitable_volume_m3", "Habitable volume per crew member", "Mürettebat Başına Yaşanabilir Hacim", "m³",
+       "isolation", "environment", 60.0, (25.0, None), (10.0, None), (4.0, None), (1.0, 200.0, 1.0), 0,
+       "Net habitable volume / crew size. ISS ~55 m³, Orion ~2.5 m³ (short missions only)."),
+    # ---- distance from Earth --------------------------------------------------------------
+    _P("earth_distance_mkm", "Distance from Earth", "Dünya'ya Uzaklık", "10⁶ km", "distance", "environment",
+       0.0004, (None, 1.0), (None, 50.0), (None, 400.0), (0.0, 410.0, 0.001), 4,
+       "ISS 0.0004, Moon 0.384, Mars 55-400 (10⁶ km). Sets the one-way communication delay and how fast a "
+       "crew member could be returned to definitive medical care."),
+    # ---- gravity fields ---------------------------------------------------------------------
+    _P("gravity_g", "Gravity level", "Yerçekimi Seviyesi", "g", "gravity", "environment",
+       1.0, (0.7, None), (0.3, None), (-0.2, None), (0.0, 1.0, 0.01), 2,
+       "Fraction of Earth gravity: microgravity 0, Moon 0.17, Mars 0.38, Earth 1. The danger anchor sits "
+       "below the physical minimum on purpose: 0 g is a *high* (red) hazard that is managed daily with "
+       "countermeasures, not an emergency (black)."),
+    _P("g_transition_days", "Days since last gravity transition", "Son Yerçekimi Geçişinden Bu Yana Gün", "days",
+       "gravity", "environment", 60.0, (14.0, None), (4.0, None), (1.0, None), (0.0, 1500.0, 1.0), 0,
+       "Days since launch, landing or arrival on another body. Space-adaptation syndrome and post-landing "
+       "orthostatic intolerance peak in the first days."),
+    # ---- hostile / closed environment (cabin atmosphere) -------------------------------------
+    _P("cabin_co2_mmhg", "Cabin CO₂ partial pressure", "Kabin CO₂ Kısmi Basıncı", "mmHg", "habitat", "environment",
+       1.0, (None, 3.0), (None, 5.3), (None, 8.0), (0.0, 30.0, 0.1), 1,
+       "ISS typically 2-4 mmHg; headaches and reduced cognition are reported above ~3-4 mmHg."),
+    _P("cabin_o2_kpa", "Cabin O₂ partial pressure", "Kabin O₂ Kısmi Basıncı", "kPa", "habitat", "environment",
+       21.0, (19.5, 23.5), (17.0, 25.5), (14.0, 30.0), (5.0, 50.0, 0.1), 1,
+       "Low = hypoxia risk, high = flammability / oxygen-toxicity risk."),
+    _P("cabin_temp_c", "Cabin temperature", "Kabin Sıcaklığı", "°C", "habitat", "environment",
+       22.0, (18.0, 27.0), (16.0, 29.0), (12.0, 33.0), (0.0, 50.0, 0.5), 1),
+    _P("cabin_humidity_pct", "Cabin relative humidity", "Kabin Bağıl Nemi", "%", "habitat", "environment",
+       45.0, (25.0, 70.0), (20.0, 75.0), (10.0, 85.0), (0.0, 100.0, 1.0), 0),
+    _P("cabin_noise_dba", "Cabin noise level", "Kabin Gürültü Seviyesi", "dBA", "habitat", "environment",
+       45.0, (None, 60.0), (None, 70.0), (None, 85.0), (20.0, 120.0, 1.0), 0,
+       "Continuous noise disturbs sleep and raises stress; NASA-STD-3001 limits work areas to ~60 dBA."),
 ]
+
+
+# Z-SCALING RULE: the networks see z = (value - ideal) / scale, clipped to +/- 6.  The scale is
+# half of the normal band, but never so small that a danger limit would lie beyond |z| = 5 -
+# otherwise the clipping would hide clinically relevant values (e.g. a 50 mSv/day solar
+# particle event, or a distance of 400 million km) from the network and from the
+# differentiable rule prior.
+MAX_DANGER_Z = 5.0
 
 
 def _validate_and_finalise(p: Parameter) -> Parameter:
@@ -241,13 +311,16 @@ def _validate_and_finalise(p: Parameter) -> Parameter:
         assert p.ideal > lo_n, f"{p.key}: ideal must be above normal_lo"
         assert lo_w is not None and lo_d is not None
         assert lo_n > lo_w > lo_d, f"{p.key}: low-side limits must be strictly ordered"
-    # Scale = half of the normal band, used to z-score inputs for the networks.
+    # Scale = half of the normal band (one-sided: distance ideal -> normal limit), widened if
+    # needed so that every danger limit maps inside |z| <= MAX_DANGER_Z (see the note above).
     if lo_n is not None and hi_n is not None:
         scale = (hi_n - lo_n) / 2.0
     elif hi_n is not None:
         scale = hi_n - p.ideal
     else:
         scale = p.ideal - lo_n  # type: ignore[operator]
+    danger_dist = max(abs(d - p.ideal) for d in (lo_d, hi_d) if d is not None)
+    scale = max(scale, danger_dist / MAX_DANGER_Z)
     object.__setattr__(p, "scale", float(max(scale, 1e-6)))
     return p
 
@@ -256,11 +329,21 @@ PARAMETERS: List[Parameter] = [_validate_and_finalise(p) for p in _RAW_PARAMETER
 PARAM_BY_KEY: Dict[str, Parameter] = {p.key: p for p in PARAMETERS}
 PARAM_KEYS: List[str] = [p.key for p in PARAMETERS]
 SEQ_KEYS: List[str] = [p.key for p in PARAMETERS[:7]]  # continuous sensor channels
-DAILY_KEYS: List[str] = [p.key for p in PARAMETERS if p.key not in SEQ_KEYS]
+DAILY_KEYS: List[str] = [p.key for p in PARAMETERS if p.key not in SEQ_KEYS]  # daily health inputs + environment
+ENV_KEYS: List[str] = [p.key for p in PARAMETERS if p.kind == "environment"]
+HEALTH_KEYS: List[str] = [p.key for p in PARAMETERS if p.kind != "environment"]
+DAILY_HEALTH_KEYS: List[str] = [k for k in DAILY_KEYS if k not in ENV_KEYS]
+# Column indices (into PARAM_KEYS order) - used by the networks and the aggregation.
+HEALTH_IDX: List[int] = [PARAM_KEYS.index(k) for k in HEALTH_KEYS]
+ENV_IDX: List[int] = [PARAM_KEYS.index(k) for k in ENV_KEYS]
 DEFAULT_VALUES: Dict[str, float] = {p.key: p.ideal for p in PARAMETERS}
 CATEGORY_KEYS: List[str] = list(CATEGORIES.keys())
 
 assert PARAM_KEYS[:7] == ["heart_rate", "spo2", "systolic_bp", "diastolic_bp", "resp_rate", "body_temp", "gsr"]
+# The environment block must be contiguous at the end: the fusion network splits the daily
+# vector into [daily health tokens | environment tokens] by position.
+assert PARAM_KEYS[-len(ENV_KEYS):] == ENV_KEYS
+assert all(CATEGORIES[p.category]["group"] == ("environment" if p.kind == "environment" else "health") for p in PARAMETERS)
 
 
 # --------------------------------------------------------------------------- #
@@ -377,15 +460,35 @@ def aggregate_risk(risks: List[float]) -> float:
     return float(0.60 * arr[0] + 0.25 * arr[:3].mean() + 0.15 * arr.mean())
 
 
-def system_risks(param_risks: Dict[str, float]) -> Dict[str, float]:
-    """Aggregate parameter risks into one risk per physiological system."""
+def system_risks(param_risks: Dict[str, float], group: Optional[str] = None) -> Dict[str, float]:
+    """Aggregate parameter risks into one risk per category (optionally only 'health' or 'environment')."""
     out: Dict[str, float] = {}
     for cat in CATEGORY_KEYS:
+        if group is not None and CATEGORIES[cat]["group"] != group:
+            continue
         vals = [param_risks[p.key] for p in PARAMETERS if p.category == cat and p.key in param_risks
                 and param_risks[p.key] is not None]
         if vals:
             out[cat] = aggregate_risk(vals)
     return out
+
+
+def health_overall_risk(param_risks: Dict[str, float]) -> float:
+    """Overall *health* risk: aggregate of the physiological parameters only.
+
+    Environment hazards are deliberately excluded here - a healthy astronaut on the ISS is
+    not "sick" because microgravity is hazardous.  The environment enters the health risk
+    through the neural network instead (it learns how each hazard raises the risk of the
+    physiological parameters) and is reported separately as the environment hazard index.
+    """
+    vals = [param_risks[k] for k in HEALTH_KEYS if param_risks.get(k) is not None]
+    return aggregate_risk(vals) if vals else 0.0
+
+
+def environment_hazard_index(param_risks: Dict[str, float]) -> float:
+    """Aggregate hazard level of the space environment (radiation, isolation, distance, gravity, habitat)."""
+    vals = [param_risks[k] for k in ENV_KEYS if param_risks.get(k) is not None]
+    return aggregate_risk(vals) if vals else 0.0
 
 
 def params_in_category(cat: str) -> List[Parameter]:

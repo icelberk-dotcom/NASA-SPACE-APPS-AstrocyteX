@@ -48,9 +48,9 @@ if (-not (Test-Path ".env")) {
 }
 
 # ---- 3. model --------------------------------------------------------------------------
-if (-not $SkipTrain -and -not (Test-Path "checkpoints\astroguard_v1.pt")) {
+if (-not $SkipTrain -and -not (Test-Path "checkpoints\astroguard_v2.pt")) {
     Step "Training AstroGuard-X on simulated crews (CPU: a few minutes)"
-    & $venvPy -m models.train --samples 3000 --epochs 10
+    & $venvPy -m models.train --samples 12000 --epochs 25
     if ($LASTEXITCODE -ne 0) { throw "training failed" }
 }
 

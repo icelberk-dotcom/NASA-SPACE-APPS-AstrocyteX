@@ -114,16 +114,24 @@ def test_subjective_encoder_bilingual_with_negation():
 def test_synthetic_dataset_shapes_and_determinism():
     a = generate_dataset(24, seed=5)
     b = generate_dataset(24, seed=5)
-    assert a["seq"].shape == (24, 96, 7) and a["history"].shape == (24, 14, 31) and a["risk"].shape == (24, 32)
+    assert a["seq"].shape == (24, 96, 7) and a["history"].shape == (24, 14, 43) and a["risk"].shape == (24, 44)
     assert a["phys"].shape == (24, 15, 4) and a["forecast"].shape == (24, 7)
     assert np.allclose(a["risk"], b["risk"]) and np.all((a["risk"] >= 0) & (a["risk"] <= 1))
     assert a["phys"][..., 2].max() <= 1.0 + 1e-6  # bone density never above baseline
 
 
 def test_scenarios_raise_overall_risk_vs_nominal():
-    nominal = generate_dataset(40, seed=1, scenario="nominal")["risk"][:, -1].mean()
+    # Same benign environment for all groups, so only the physiological scenario differs.
+    env = {"profile": "earth_analog", "event": "none"}
+    nominal = generate_dataset(40, seed=1, scenario="nominal", **env)["risk"][:, -1].mean()
     for sc in ("infection", "hypoxia_co2", "cardiac_stress"):
-        assert generate_dataset(40, seed=1, scenario=sc)["risk"][:, -1].mean() > nominal + 0.1
+        assert generate_dataset(40, seed=1, scenario=sc, **env)["risk"][:, -1].mean() > nominal + 0.1
+
+
+def test_environment_events_raise_overall_risk_vs_no_event():
+    base = generate_dataset(40, seed=2, scenario="nominal", profile="iss_leo", event="none")["risk"][:, -1].mean()
+    for ev in ("solar_particle_event", "co2_scrubber_failure", "post_landing"):
+        assert generate_dataset(40, seed=2, scenario="nominal", profile="iss_leo", event=ev)["risk"][:, -1].mean() > base + 0.02
     assert "nominal" in SCENARIO_NAMES
 
 

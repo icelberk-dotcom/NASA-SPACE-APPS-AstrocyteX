@@ -20,7 +20,7 @@ def test_health_and_parameter_registry(client):
     h = client.get("/health").json()
     assert h["status"] == "ok" and h["model"]["loaded"] and h["ecg"]["mode"] == "builtin-screening"
     reg = client.get("/parameters").json()
-    assert len(reg["parameters"]) == 31 and [l["key"] for l in reg["levels"]] == ["gray", "green", "yellow", "red", "black"]
+    assert len(reg["parameters"]) == 43 and [l["key"] for l in reg["levels"]] == ["gray", "green", "yellow", "red", "black"]
 
 
 def test_full_task_and_reward_flow_over_http(client):
@@ -52,7 +52,7 @@ def test_validation_errors(client):
 def test_turkish_briefing(client):
     body = {"values": {**DEFAULT_VALUES, **scenario_preset("cardiac_stress")}}
     a = client.post("/astronauts/tr1/assess?lang=tr", json=body).json()
-    assert "Genel risk" in a["advisor"]["summary"]
+    assert "Genel sağlık riski" in a["advisor"]["summary"]
 
 
 def test_chat_endpoint_offline(client):

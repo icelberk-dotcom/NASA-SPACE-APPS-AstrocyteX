@@ -24,8 +24,8 @@ def app(tmp_path, monkeypatch):
 def test_dashboard_renders_and_runs_full_gamified_flow(app):
     at = app.run()
     assert not at.exception, at.exception
-    # 31 number inputs - one per monitored parameter - each with a coloured indicator beside it
-    assert len([n for n in at.number_input if n.key and n.key.startswith("val_")]) == 31
+    # 43 number inputs - one per monitored parameter (31 physiological + 12 environment) - each with a coloured indicator beside it
+    assert len([n for n in at.number_input if n.key and n.key.startswith("val_")]) == 43
 
     at.selectbox(key="preset_name").select("dehydration")
     at.button(key="apply_preset").click().run()

@@ -28,27 +28,39 @@ import time
 from typing import Any, Dict, List, Optional
 
 from backend.schemas import AdvisorOutput, TaskDraft
-from backend.task_library import ALLOWED_TAGS, CRITICAL_TASK, normalize_tag, templates_for
+from backend.task_library import ALLOWED_TAGS, CRITICAL_TASK, ENV_CRITICAL_TASK, normalize_tag, templates_for
 from utils.config import Settings, get_settings
-from utils.reference_ranges import PARAM_BY_KEY, RISKY_LEVELS
+from utils.reference_ranges import CATEGORIES, PARAM_BY_KEY, RISKY_LEVELS
 
 log = logging.getLogger("astroguard.gemini")
 
 SYSTEM_PROMPT = """You are AstroGuard-X, an on-board AI health assistant for astronauts on long-duration missions.
 You receive risk scores (0-100 %) produced by an uncertainty-aware multimodal model together with raw values,
-normal ranges, the astronaut's subjective log and space-physiology projections.
+normal ranges, the astronaut's subjective log, space-physiology projections and the SPACE ENVIRONMENT:
+NASA's five hazards (RIDGE) - Radiation, Isolation & confinement, Distance from Earth, Gravity fields and the
+hostile/closed habitat (cabin CO2, O2, temperature, humidity, noise). Items with kind='environment' are hazards
+of the surroundings, not of the body; 'environment_uplift_of_health_risk_pts' says how many points of the health
+risk exist only because of the current environment.
 
 Rules:
 - Give short, calm, practical guidance. Never diagnose and NEVER recommend drug names or doses.
 - Mitigation tasks must be concrete, safe, doable on a spacecraft in <= 30 minutes (e.g. 'Drink 500 ml electrolyte water',
-  'Perform 15 min ARED resistance exercise', 'Take a 20-minute guided breathing session', 'Re-measure and log').
-- Create 1-2 tasks per at-risk parameter (use parameter_key exactly as given). For parameters at level 'black'
-  include a task to contact the flight surgeon immediately.
-- "tag" must be exactly one of: hydration, exercise, breathing, sleep, nutrition, wellbeing, ecg, medical, monitoring, environment,
-  cooling, recovery, hygiene, general (English keywords, even when the text is Turkish).
+  'Perform 15 min ARED resistance exercise', 'Take a 20-minute guided breathing session', 'Move to the radiation storm
+  shelter', 'Check the CO2 scrubber and increase ventilation', 'Re-measure and log').
+- Create 1-2 tasks per at-risk parameter (use parameter_key exactly as given). For physiological parameters at level
+  'black' include a task to contact the flight surgeon immediately; for environment hazards at 'black' include a task to
+  alert mission control / start the hazard emergency procedure.
+- Explain how the environment changes the picture (e.g. a long communication delay or distance from Earth means the
+  crew must act autonomously; high CO2 explains headache and fast breathing; a recent landing explains dizziness).
+- "tag" must be exactly one of: hydration, exercise, breathing, sleep, nutrition, wellbeing, ecg, medical, monitoring,
+  environment, radiation, cooling, recovery, hygiene, general (English keywords, even when the text is Turkish).
 - Consider interactions (e.g. dehydration + high heart rate + dizziness) and avoid redundant tasks.
-- Set escalate_to_flight_surgeon=true when any parameter is black or several are red.
+- Set escalate_to_flight_surgeon=true when any physiological parameter is black or several are red.
 - Reply in the requested language. Output JSON only, matching the schema."""
+
+
+def _is_env(item: Dict[str, Any]) -> bool:
+    return item.get("kind") == "environment" or PARAM_BY_KEY.get(item["key"]) is not None and PARAM_BY_KEY[item["key"]].kind == "environment"
 
 
 class LocalReasoner:
@@ -61,35 +73,58 @@ class LocalReasoner:
         for item in risky:
             key, level, direction = item["key"], item["level"], item["direction"]
             templates = templates_for(key, direction)
-            # yellow: 1 task; red: 2; black: 1 + the critical "contact the flight surgeon" task (avoids duplicate escalations)
+            # yellow: 1 task; red: 2; black: 1 + the critical escalation task (avoids duplicate escalations)
             n = 2 if level == "red" else 1
             for title, text, minutes, tag in templates[:n]:
                 tasks.append(TaskDraft(parameter_key=key, title=title, instructions=text, duration_min=minutes, tag=tag))
             if level == "black":
-                title, text, minutes, tag = CRITICAL_TASK
+                title, text, minutes, tag = ENV_CRITICAL_TASK if _is_env(item) else CRITICAL_TASK
                 tasks.append(TaskDraft(parameter_key=key, title=title, instructions=text, duration_min=minutes, tag=tag))
 
-        n_black = sum(1 for i in risky if i["level"] == "black")
-        n_red = sum(1 for i in risky if i["level"] == "red")
+        health = [i for i in risky if not _is_env(i)]
+        hazards = [i for i in risky if _is_env(i)]
+        n_black = sum(1 for i in health if i["level"] == "black")
+        n_red = sum(1 for i in health if i["level"] == "red")
         escalate = n_black > 0 or n_red >= 3
         overall = context.get("overall_risk_pct", 0.0)
+        env = context.get("environment") or {}
+        env_sentence = ""
+        if env and (env.get("hazard_index_pct", 0) >= 15 or (env.get("environment_uplift_of_health_risk_pts") or 0) >= 1):
+            uplift = env.get("environment_uplift_of_health_risk_pts")
+            themes = sorted(env.get("themes", {}).items(), key=lambda kv: -kv[1]["risk_pct"])
+            top = ", ".join(CATEGORIES[c]["tr" if lang == "tr" else "en"] for c, t in themes[:2] if t["risk_pct"] >= 40)
+            if lang == "tr":
+                env_sentence = f" Uzay ortamı tehlike indeksi %{env.get('hazard_index_pct', 0):.0f}" + (f" (öne çıkan: {top})" if top else "") + "."
+                if uplift is not None and uplift >= 1:
+                    env_sentence += f" Mevcut ortam sağlık riskinizi yaklaşık +{uplift:.0f} puan artırıyor."
+                if (env.get("one_way_comm_delay_s") or 0) > 60:
+                    env_sentence += f" Tek yönlü iletişim gecikmesi ~{env['one_way_comm_delay_s'] / 60:.0f} dk: özerk hareket edin."
+            else:
+                env_sentence = f" Space-environment hazard index is {env.get('hazard_index_pct', 0):.0f}%" + (f" (mainly {top})" if top else "") + "."
+                if uplift is not None and uplift >= 1:
+                    env_sentence += f" The current environment adds about +{uplift:.0f} points to your health risk."
+                if (env.get("one_way_comm_delay_s") or 0) > 60:
+                    env_sentence += f" One-way communication delay is ~{env['one_way_comm_delay_s'] / 60:.0f} min: act autonomously."
 
         if not risky:
             summary = ("All monitored parameters are within acceptable limits. Keep up your exercise, hydration and sleep routine."
                        if lang != "tr" else
-                       "İzlenen tüm parametreler kabul edilebilir sınırlar içinde. Egzersiz, sıvı ve uyku düzeninizi sürdürün.")
+                       "İzlenen tüm parametreler kabul edilebilir sınırlar içinde. Egzersiz, sıvı ve uyku düzeninizi sürdürün.") + env_sentence
             recs = ["Maintain your daily ARED / treadmill session.", "Keep fluid intake at ~2.5 L/day.", "Log how you feel each evening."]
             if lang == "tr":
                 recs = ["Günlük ARED / koşu bandı seansınızı sürdürün.", "Günlük sıvı alımını ~2,5 L'de tutun.", "Her akşam kendinizi nasıl hissettiğinizi kaydedin."]
         else:
-            names = ", ".join(PARAM_BY_KEY[i["key"]].name(lang) for i in risky[:4])
+            names = ", ".join(PARAM_BY_KEY[i["key"]].name(lang) for i in health[:4]) or "-"
+            hz_names = ", ".join(PARAM_BY_KEY[i["key"]].name(lang) for i in hazards[:3])
             if lang == "tr":
-                summary = (f"Genel risk %{overall:.0f}. Dikkat gerektiren parametreler: {names}. "
-                           f"{len(tasks)} hafifletme görevi oluşturuldu; tamamlayarak puan kazanın. "
+                summary = (f"Genel sağlık riski %{overall:.0f}. Dikkat gerektiren parametreler: {names}."
+                           + (f" Ortam tehlikeleri: {hz_names}." if hz_names else "") + env_sentence
+                           + f" {len(tasks)} hafifletme görevi oluşturuldu; tamamlayarak puan kazanın. "
                            + ("Acil olarak uçuş cerrahına başvurun." if escalate else "Değerler kötüleşirse uçuş cerrahına bildirin."))
             else:
-                summary = (f"Overall risk is {overall:.0f}%. Parameters needing attention: {names}. "
-                           f"{len(tasks)} mitigation tasks were generated - complete them to earn points. "
+                summary = (f"Overall health risk is {overall:.0f}%. Parameters needing attention: {names}."
+                           + (f" Environment hazards: {hz_names}." if hz_names else "") + env_sentence
+                           + f" {len(tasks)} mitigation tasks were generated - complete them to earn points. "
                            + ("Contact the flight surgeon immediately." if escalate else "Notify the flight surgeon if values worsen."))
             recs = []
             seen = set()
@@ -216,4 +251,4 @@ class GeminiAdvisor:
                 clean.append(TaskDraft(parameter_key=item["key"], title=title, instructions=text, duration_min=minutes, tag=tag))
         return AdvisorOutput(summary=out.summary[:1200], recommendations=[r[:200] for r in out.recommendations[:4]],
                              tasks=clean, escalate_to_flight_surgeon=out.escalate_to_flight_surgeon
-                             or any(i["level"] == "black" for i in context.get("at_risk", [])))
+                             or any(i["level"] == "black" and not _is_env(i) for i in context.get("at_risk", [])))

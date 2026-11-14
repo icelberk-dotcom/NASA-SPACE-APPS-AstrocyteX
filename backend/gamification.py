@@ -78,6 +78,8 @@ BADGES: List[BadgeDef] = [
     BadgeDef("zero_g_zen", "Zero-G Zen", "Complete 2 wellbeing tasks.", "🧘", _tag("wellbeing", 2)),
     BadgeDef("ecg_ace", "ECG Ace", "Complete an ECG re-check task.", "📈", _tag("ecg", 1)),
     BadgeDef("houston_called", "Houston, We Called", "Complete a task that involves contacting the flight surgeon.", "📡", _tag("medical", 1)),
+    BadgeDef("storm_shelter", "Storm Shelter", "Complete a radiation-protection task (shelter, dosimetry, dose budget).", "☢️", _tag("radiation", 1)),
+    BadgeDef("habitat_keeper", "Habitat Keeper", "Complete 3 habitat / environment tasks (CO2, O2, temperature, noise).", "🛠️", _tag("environment", 3)),
     BadgeDef("code_black_survivor", "Code Black Survivor", "Complete a task created by a black (critical) alert.", "🛟", lambda s: s["black_done"] >= 1),
     BadgeDef("orbit_streak_3", "3-Day Orbit Streak", "Complete tasks 3 days in a row.", "🔥", lambda s: s["streak"] >= 3),
     BadgeDef("week_in_orbit", "Week in Orbit", "Complete tasks 7 days in a row.", "🚀", lambda s: s["streak"] >= 7),

@@ -13,6 +13,7 @@ data/*.db-*
 data/*.log
 data/_*
 checkpoints/*.pt
+checkpoints/*.log
 # Large third-party ECG package / weights are NOT part of this repository
 external/
 ecg_package/

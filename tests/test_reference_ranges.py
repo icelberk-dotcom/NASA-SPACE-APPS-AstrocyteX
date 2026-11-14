@@ -57,7 +57,7 @@ def test_one_sided_parameters():
 
 
 def test_registry_layout():
-    assert len(PARAMETERS) == 31 and len(SEQ_KEYS) == 7 and len(DAILY_KEYS) == 24
+    assert len(PARAMETERS) == 43 and len(SEQ_KEYS) == 7 and len(DAILY_KEYS) == 36
     for key in ("sleep_hours", "fluid_intake_ml", "urine_sg", "saliva_cortisol", "exercise_min", "gsr", "body_temp",
                 "spo2", "resp_rate", "hemoglobin_gdl", "glucose_mgdl", "protein_g", "ecg_qtc_ms", "heart_rate", "systolic_bp"):
         assert key in PARAM_BY_KEY

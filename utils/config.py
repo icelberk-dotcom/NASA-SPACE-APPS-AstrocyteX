@@ -36,11 +36,11 @@ class Settings:
     # ---- storage / model files ----------------------------------------------------
     db_path: Path = field(default_factory=lambda: Path(os.getenv("ASTROGUARD_DB", PROJECT_ROOT / "data" / "astroguard.db")))
     checkpoint_path: Path = field(
-        default_factory=lambda: Path(os.getenv("ASTROGUARD_CHECKPOINT", PROJECT_ROOT / "checkpoints" / "astroguard_v1.pt"))
+        default_factory=lambda: Path(os.getenv("ASTROGUARD_CHECKPOINT", PROJECT_ROOT / "checkpoints" / "astroguard_v2.pt"))
     )
     autotrain: bool = field(default_factory=lambda: _env_bool("ASTROGUARD_AUTOTRAIN", True))
-    # How strongly the transparent reference-range score is trusted vs. the neural net.
-    rule_blend: float = field(default_factory=lambda: float(os.getenv("ASTROGUARD_RULE_BLEND", "0.65")))
+    # How strongly the transparent reference-range score is weighted vs. AstroGuardNet v2 (safety floor at >=70% always applies).
+    rule_blend: float = field(default_factory=lambda: float(os.getenv("ASTROGUARD_RULE_BLEND", "0.20")))
     mc_samples: int = field(default_factory=lambda: int(os.getenv("ASTROGUARD_MC_SAMPLES", "24")))
 
     # ---- Gemini (Google GenAI SDK) ------------------------------------------------

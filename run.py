@@ -5,7 +5,8 @@ AstroGuard-X launcher.
     python run.py ui      Streamlit dashboard (backend in-process)          http://localhost:8501
     python run.py api     FastAPI REST backend                              http://localhost:8000/docs
     python run.py all     REST backend + dashboard talking to it
-    python run.py train   (re)train the risk model on simulated crews
+    python run.py train   (re)train the risk model on simulated crews (GPU if available)
+    python run.py evaluate  held-out test (MCC, macro-F1, QWK, safety metrics) -> docs/MODEL_EVALUATION.md
     python run.py test    run the unit tests
     python run.py ecg     check the ECG-analyser integration
 """
@@ -40,7 +41,9 @@ def main() -> int:
         finally:
             api.terminate()
     if cmd == "train":
-        return _run([PY, "-m", "models.train", *extra])
+        return _run([PY, "-u", "-m", "models.train", *extra])
+    if cmd == "evaluate":
+        return _run([PY, "-u", "-m", "models.evaluate", *extra])
     if cmd == "test":
         return _run([PY, "-m", "pytest", "-q", *extra])
     if cmd == "ecg":

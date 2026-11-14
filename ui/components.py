@@ -28,13 +28,13 @@ def legend_html() -> str:
     return " &nbsp; ".join(f'{dot(lv)}<span class="ag-muted">{rng} · {esc(level_label(lv))}</span>' for lv, rng in items)
 
 
-def gauge(overall: Dict[str, Any]) -> go.Figure:
+def gauge(overall: Dict[str, Any], height: int = 250) -> go.Figure:
     fig = go.Figure(go.Indicator(
-        mode="gauge+number", value=overall["risk_pct"], number={"suffix": " %", "font": {"size": 44}},
+        mode="gauge+number", value=overall["risk_pct"], number={"suffix": " %", "font": {"size": 44 if height >= 240 else 34}},
         gauge={"axis": {"range": [0, 100], "tickcolor": "#9aa0a6"}, "bar": {"color": "#ffffff", "thickness": 0.22},
                "steps": BAND_STEPS, "borderwidth": 0,
                "threshold": {"line": {"color": "#ffffff", "width": 4}, "thickness": 0.9, "value": overall["risk_pct"]}}))
-    fig.update_layout(height=250, **{**_LAYOUT, "margin": dict(l=20, r=20, t=20, b=0)})
+    fig.update_layout(height=height, **{**_LAYOUT, "margin": dict(l=20, r=20, t=20, b=0)})
     return fig
 
 
@@ -49,15 +49,19 @@ def forecast_fig(forecast: List[float]) -> go.Figure:
     return fig
 
 
-def systems_grid(st, assessment: Dict[str, Any]) -> None:
-    systems = assessment["systems"]
-    cols = st.columns(5)
-    for i, (cat, s) in enumerate(systems.items()):
+def cards_grid(st, cards: Dict[str, Dict[str, Any]], n_cols: int = 5) -> None:
+    """Grid of risk cards (icon, label, coloured indicator, %) - physiological systems or environment themes."""
+    cols = st.columns(n_cols)
+    for i, (_key, s) in enumerate(cards.items()):
         label = s["label_tr"] if lang() == "tr" else s["label"]
-        with cols[i % 5]:
+        with cols[i % n_cols]:
             st.markdown(
                 f'<div class="ag-card ag-sys">{s["icon"]}<br><span class="ag-muted">{esc(label)}</span><br>'
                 f'{dot(s["level"], True)}<span class="big">{s["risk_pct"]:.0f}%</span></div>', unsafe_allow_html=True)
+
+
+def systems_grid(st, assessment: Dict[str, Any]) -> None:
+    cards_grid(st, assessment["systems"])
 
 
 def parameter_table_html(params: List[Dict[str, Any]]) -> str:

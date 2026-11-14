@@ -71,7 +71,13 @@ class RuleRiskTorch(nn.Module):
         return risk
 
 
-def aggregate_risk_torch(risk: torch.Tensor) -> torch.Tensor:
-    """Torch version of ``aggregate_risk`` over the last dimension (0.6 max + 0.25 top-3 + 0.15 mean)."""
+def aggregate_risk_torch(risk: torch.Tensor, idx=None) -> torch.Tensor:
+    """Torch version of ``aggregate_risk`` over the last dimension (0.6 max + 0.25 top-3 + 0.15 mean).
+
+    ``idx`` optionally restricts the aggregation to a subset of columns (e.g. the
+    physiological parameters only - the overall *health* risk excludes environment hazards).
+    """
+    if idx is not None:
+        risk = risk[..., idx]
     srt, _ = torch.sort(risk, dim=-1, descending=True)
     return 0.60 * srt[..., 0] + 0.25 * srt[..., :3].mean(-1) + 0.15 * risk.mean(-1)

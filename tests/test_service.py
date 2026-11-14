@@ -16,9 +16,17 @@ def _p(a, key):
 def test_healthy_crew_has_no_tasks(service):
     a = service.assess("h1", _reading())
     assert a.overall["level"] in ("gray", "green") and a.new_tasks == []
-    assert len(a.parameters) == 31 and len(a.forecast) == 7
-    assert abs(sum(a.modality_attention.values()) - 1.0) < 1e-3
-    assert a.physics["projections"]["+180d"]["bone_density_change_pct"] <= 0
+    assert len(a.parameters) == 43 and len(a.forecast) == 7
+    assert abs(sum(a.modality_attention.values()) - 1.0) < 3e-3  # 5 values rounded to 3 decimals
+    # default values = Earth environment (gravity_g = 1): bone must not *gain* density over the projection
+    assert a.physics["gravity"] == 1.0
+    assert a.physics["projections"]["+180d"]["bone_density_change_pct"] <= a.physics["current"]["bone_density_change_pct"] + 0.05
+
+
+def test_microgravity_projects_bone_loss(service):
+    a = service.assess("mg1", _reading({"gravity_g": 0.0, "exercise_min": 0.0}))
+    assert a.physics["gravity"] == 0.0
+    assert a.physics["projections"]["+180d"]["bone_density_change_pct"] < a.physics["current"]["bone_density_change_pct"]
 
 
 def test_dehydration_scenario_generates_actionable_tasks(service):
@@ -68,8 +76,9 @@ def test_safety_floor_never_silences_a_red_range_alert(service):
 
 def test_blend_uses_both_rule_and_model(service):
     p = _p(service.assess("b1", _reading({"heart_rate": 100})), "heart_rate")
+    w = service.settings.rule_blend
     assert p.model_risk_pct is not None and p.ci_low <= p.risk_pct <= p.ci_high
-    assert p.risk_pct == pytest.approx(0.65 * p.rule_risk_pct + 0.35 * p.model_risk_pct, abs=0.2)
+    assert p.risk_pct == pytest.approx(w * p.rule_risk_pct + (1 - w) * p.model_risk_pct, abs=0.2)
 
 
 def test_rules_only_mode_works_without_a_model(rules_only_service):

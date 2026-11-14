@@ -1,19 +1,21 @@
 """
 Cross-attention multimodal fusion.
 
-Four kinds of evidence describe an astronaut's state and they live on very different
+Five kinds of evidence describe an astronaut's state and they live on very different
 time scales and formats:
 
-    sensor tokens      continuous streams summarised by Mamba-2        (minutes - hours)
-    trend tokens       multi-day physiology summarised by TCN + TFT    (days - weeks)
-    daily tokens       one token *per* daily input / lab value          (once a day)
-    subjective tokens  the astronaut's free-text log, encoded           (once a day)
+    sensor tokens       continuous streams summarised by Mamba-2        (minutes - hours)
+    trend tokens        multi-day physiology summarised by TCN + TFT    (days - weeks)
+    daily tokens        one token *per* daily input / lab value          (once a day)
+    subjective tokens   the astronaut's free-text log, encoded           (once a day)
+    environment tokens  space hazards (radiation, isolation, distance,   (mission context)
+                        gravity, closed habitat) from EnvironmentEncoder
 
 Fusion happens in two attention stages:
 
  1. **Context stage** - daily and subjective tokens act as *queries* and attend to the
-    sensor + trend tokens.  A single creatinine value, for instance, can then be read
-    "in the light of" the last hour of heart-rate data.
+    sensor + trend + environment tokens.  A single creatinine value, for instance, can then
+    be read "in the light of" the last hour of heart-rate data and of the current habitat.
  2. **Latent stage** - a small set of learned latent queries (a Perceiver-style
     bottleneck) cross-attends to *all* tokens, followed by self-attention and an MLP.
     The attention mass each modality receives is returned so the UI can show which
@@ -26,12 +28,12 @@ References
 """
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
 
-MODALITIES: List[str] = ["sensors", "trend", "daily", "subjective"]
+MODALITIES: List[str] = ["sensors", "trend", "daily", "subjective", "environment"]
 
 
 class CrossAttentionLayer(nn.Module):
@@ -89,23 +91,26 @@ class CrossAttentionFusion(nn.Module):
         self.out_norm = nn.LayerNorm(d_model)
 
     def forward(self, sensor_tokens: torch.Tensor, trend_tokens: torch.Tensor, daily: torch.Tensor,
-                subj: torch.Tensor) -> Dict[str, torch.Tensor]:
+                subj: torch.Tensor, env_tokens: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
         B = daily.shape[0]
         t = self.type_emb
         sensors = sensor_tokens + t[0]
         trend = trend_tokens + t[1]
         daily_tok = daily.unsqueeze(-1) * self.daily_w + self.daily_b + t[2]  # (B, n_daily, d)
         subj_tok = self.subj_mlp(subj).view(B, self.n_subj_tokens, self.d_model) + t[3]
+        if env_tokens is None:  # environment unknown -> a single neutral token keeps shapes fixed
+            env_tokens = torch.zeros(B, 1, self.d_model, device=daily.device, dtype=daily.dtype)
+        env = env_tokens + t[4]
 
-        # Stage 1: daily / subjective tokens read the continuous context.
-        context = torch.cat([sensors, trend], dim=1)
+        # Stage 1: daily / subjective tokens read the continuous context and the environment.
+        context = torch.cat([sensors, trend, env], dim=1)
         slow = torch.cat([daily_tok, subj_tok], dim=1)
         slow, _ = self.context_stage(slow, context)
         daily_tok, subj_tok = slow[:, : daily_tok.shape[1]], slow[:, daily_tok.shape[1]:]
 
         # Stage 2: latent bottleneck attends to every modality.
-        all_tokens = torch.cat([sensors, trend, daily_tok, subj_tok], dim=1)
-        sizes = [sensors.shape[1], trend.shape[1], daily_tok.shape[1], subj_tok.shape[1]]
+        all_tokens = torch.cat([sensors, trend, daily_tok, subj_tok, env], dim=1)
+        sizes = [sensors.shape[1], trend.shape[1], daily_tok.shape[1], subj_tok.shape[1], env.shape[1]]
         lat = self.latents.unsqueeze(0).expand(B, -1, -1)
         weights = None
         for cross, self_attn in zip(self.cross_layers, self.self_layers):
@@ -116,5 +121,5 @@ class CrossAttentionFusion(nn.Module):
         # Attention mass per modality (averaged over latents) - sums to 1 across modalities.
         per_token = weights.mean(dim=1)  # (B, n_tokens)
         parts = torch.split(per_token, sizes, dim=1)
-        modality_attn = torch.stack([p.sum(dim=1) for p in parts], dim=1)  # (B, 4)
-        return {"fused": fused, "modality_attn": modality_attn, "daily_attn": parts[2]}
+        modality_attn = torch.stack([p.sum(dim=1) for p in parts], dim=1)  # (B, 5)
+        return {"fused": fused, "modality_attn": modality_attn, "daily_attn": parts[2], "env_attn": parts[4]}

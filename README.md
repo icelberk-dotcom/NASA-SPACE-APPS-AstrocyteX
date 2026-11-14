@@ -3,10 +3,11 @@
 **AI-powered astronaut health monitoring with a built-in gamified mitigation system** — built for the
 **NASA Space Apps Challenge**.
 
-AstroGuard-X fuses continuous wearable sensors, daily lab/diet/sleep inputs, the astronaut's own words and a
-12-lead ECG into a single, uncertainty-aware risk picture. When something drifts (yellow, red or black),
-an AI (Gemini online, a rule-based reasoner offline) writes concrete mitigation tasks — *"Drink 500 ml electrolyte
-water"*, *"Perform 15 min ARED resistance exercise"*, *"Take a 20-minute guided breathing session"* — and
+AstroGuard-X fuses continuous wearable sensors, daily lab/diet/sleep inputs, the astronaut's own words, a
+12-lead ECG **and the space environment itself** (NASA's five hazards: radiation, isolation & confinement, distance
+from Earth, gravity fields, hostile/closed habitat) into a single, uncertainty-aware risk picture. When something
+drifts (yellow, red or black), an AI (Gemini online, a rule-based reasoner offline) writes concrete mitigation tasks — *"Drink 500 ml electrolyte
+water"*, *"Perform 15 min ARED resistance exercise"*, *"Move to the radiation storm shelter"* — and
 the crew member earns XP, levels, streaks and badges for completing them.
 
 > ⚠️ **Research / demonstration software — not a medical device.** Reference ranges are illustrative, the neural
@@ -16,20 +17,22 @@ the crew member earns XP, levels, streaks and badges for completing them.
 ---
 
 ## Contents
-[Features](#features) · [Architecture](#architecture) · [Quick start](#quick-start) · [ECG integration](#ecg-integration-teknofest-v23) ·
-[Gemini](#gemini-reasoning) · [Risk indicators](#risk-indicators) · [Gamification](#tasks--gamification) · [REST API](#rest-api) ·
-[Project layout](#project-layout) · [Models](#the-models) · [Testing](#testing) · [Deployment](#deployment) ·
+[Features](#features) · [Architecture](#architecture) · [Quick start](#quick-start) · [Space environment](#space-environment-nasa-ridge-hazards) ·
+[ECG integration](#ecg-integration-teknofest-v23) · [Gemini](#gemini-reasoning) · [Risk indicators](#risk-indicators) ·
+[Gamification](#tasks--gamification) · [REST API](#rest-api) · [Project layout](#project-layout) · [Models](#the-models) ·
+[Evaluation](#evaluation-held-out-test) · [Testing](#testing) · [Deployment](#deployment) ·
 [Publish to GitHub](#publish-to-github) · [Limitations](#limitations--honest-notes) · [Credits](#open-source-attributions)
 
 ## Features
 
 | Area | What you get |
 |---|---|
-| **31 monitored parameters** | Uyku saatleri · sıvı tüketimi · idrar/tükürük testleri · egzersiz süresi · EKG · kalp ritmi / nabız · kan basıncı · biyokimyasal değerler · hemogram · SpO₂ · solunum hızı · GSR · vücut sıcaklığı · beslenme ve diyet — each with unit, normal range and live percentage risk |
+| **43 monitored parameters** | 31 physiological — uyku saatleri · sıvı tüketimi · idrar/tükürük testleri · egzersiz süresi · EKG · kalp ritmi / nabız · kan basıncı · biyokimyasal değerler · hemogram · SpO₂ · solunum hızı · GSR · vücut sıcaklığı · beslenme ve diyet — **plus 12 space-environment hazards** (radiation, isolation & confinement, distance from Earth, gravity fields, closed-habitat air) — each with unit, normal range and live percentage risk |
+| **Environment-aware AI** | the network learns how each hazard changes physiological risk (CO₂ → breathing, radiation storm → blood counts, landing → orthostatic intolerance, distance → no evacuation); dashboard shows a hazard index, the 5 RIDGE themes and a counterfactual *environmental risk uplift* |
 | **Risk indicator circles** | ⚪ gray < 15 % · 🟢 green 15–40 % · 🟡 yellow 40–70 % · 🔴 red 70–90 % · ⚫ black > 90 % — next to *every* value (data entry **and** dashboard) |
-| **AI task generator** | Any yellow/red/black parameter ⇒ specific, actionable tasks (Gemini structured output → validated → offline fallback) |
-| **Gamification** | Points scaled by severity, live XP bar, levels & ranks, day streaks, 16 badges, level-up celebration |
-| **Neural stack** | Mamba-2 · TCN + TFT · cross-attention fusion · Neural ODE + PINN · Bayesian uncertainty |
+| **AI task generator** | Any yellow/red/black parameter or hazard ⇒ specific, actionable tasks (Gemini structured output → validated → offline fallback) |
+| **Gamification** | Points scaled by severity, live XP bar, levels & ranks, day streaks, 18 badges, level-up celebration |
+| **Neural stack** | Mamba-2 · TCN + TFT · environment encoder + FiLM · cross-attention fusion · Neural ODE + PINN · Bayesian uncertainty |
 | **ECG adapter** | Plug-in for the **TEKNOFEST V23 ECG analyser** (10-class, 12-lead) with offline screening fallback |
 | **Edge-first** | Everything works without internet; Gemini is optional and guarded by a circuit breaker |
 | **Bilingual UI** | English / Türkçe |
@@ -44,13 +47,18 @@ flowchart LR
       D[Daily inputs & labs<br/>sleep · fluids · diet · urine/saliva · blood · CBC]
       L[Subjective log<br/>EN / TR free text]
       E[12-lead ECG]
+      V[Space environment<br/>radiation · isolation · distance<br/>gravity · cabin CO2/O2/temp/noise]
     end
     S --> M[Mamba-2 SSD encoder]
     D --> H[14-day history]
+    V --> H
     H --> T[TCN + Temporal Fusion Transformer<br/>+ 7-day forecast]
     D --> F
     L --> SE[Symptom encoder<br/>lexicon / transformers]
-    M --> F[Cross-attention fusion<br/>context stage + latent bottleneck]
+    V --> EN[Environment encoder<br/>hazard tokens + self-attention]
+    EN --> F
+    EN -- FiLM gamma/beta --> F
+    M --> F[Cross-attention fusion<br/>5 modalities + latent bottleneck]
     T --> F
     SE --> F
     F --> P[Neural ODE + PINN<br/>fluid shift · bone · muscle · plasma volume]
@@ -62,7 +70,7 @@ flowchart LR
     K --> X[XP · levels · badges]
 ```
 
-**How the displayed risk is computed.** `risk = a·rule + (1−a)·model` with `a = 0.65` (configurable).
+**How the displayed risk is computed.** `risk = a·rule + (1−a)·model` with `a = 0.20` (configurable).
 `rule` is the transparent reference-range score; `model` is the Monte-Carlo mean of the network, which learns
 *interactions* on top of it (poor sleep + stress markers, symptoms in the log, trends…). A **safety floor** guarantees
 that a red/black range alert can never be softened by the AI. Hover a row in the dashboard to see rule vs. model.
@@ -88,11 +96,43 @@ bash scripts/setup.sh            # add --gpu to try the fused mamba-ssm CUDA ker
 .venv/bin/python run.py ui
 ```
 
-`python run.py all` starts the API and a dashboard that talks to it. Other commands: `train`, `test`, `ecg`.
+`python run.py all` starts the API and a dashboard that talks to it. Other commands: `train`, `evaluate`, `test`, `ecg`.
 If no checkpoint exists the backend trains a compact model on first start (`ASTROGUARD_AUTOTRAIN=1`).
 
 Try it: *Data entry → Demo scenario → "dehydration" → Load scenario → Run AI assessment* — circles turn
-yellow/red, tasks appear under **Missions & rewards**; tick them to fill the XP bar.
+yellow/red, tasks appear under **Missions & rewards**; tick them to fill the XP bar. Then pick a **mission profile**
+(sidebar, e.g. *Mars transit*) or an **environment event** (e.g. *Solar particle event*) and run again.
+
+## Space environment (NASA RIDGE hazards)
+
+NASA's Human Research Program groups the hazards of spaceflight into five categories — **R**adiation, **I**solation &
+confinement, **D**istance from Earth, **G**ravity fields and hostile/closed **E**nvironments. AstroGuard-X takes each of
+them as measurable inputs (`utils/reference_ranges.py`, environment block):
+
+| Theme | Parameters (unit) | Normal → danger anchors (illustrative) |
+|---|---|---|
+| ☢️ Radiation | dose rate (mSv/day) · cumulative mission dose (mSv) | ≤ 1 → 20 mSv/d (solar particle event) · ≤ 150 → 600 mSv (NASA career limit) |
+| 🔒 Isolation & confinement | isolation duration (days) · habitable volume per crew member (m³) | ≤ 90 → 365 d · ≥ 25 → 4 m³ |
+| 🌍 Distance from Earth | distance (10⁶ km) → derived one-way light delay & time to definitive care | ≤ 1 (cislunar) → 400 (Mars far side) |
+| 🪐 Gravity fields | gravity level (g) · days since the last gravity transition | 0 g = red (managed daily), Mars yellow, Earth gray · ≥ 14 → 1 day after landing |
+| 🌫️ Hostile / closed habitat | cabin CO₂ (mmHg) · cabin O₂ (kPa) · temperature (°C) · humidity (%) · noise (dBA) | e.g. CO₂ ≤ 3 → 8 mmHg, noise ≤ 60 → 85 dBA |
+
+How the environment enters the assessment:
+
+1. **Own hazard level** — every environment parameter gets a % and a coloured circle and can trigger tasks
+   (*"Move to the radiation storm shelter"*, *"Check the CO₂ scrubber and increase ventilation"*, *"Fluid-load before
+   standing"*). They form a separate **environment hazard index** and are *not* counted as illness: the overall
+   **health** risk aggregates the 31 physiological parameters only.
+2. **Learned interactions** — the network has a dedicated *environment encoder* (hazard tokens from z-score + hazard
+   risk, self-attention between hazards), a fifth fusion modality and a **FiLM** layer that modulates the fused
+   physiology representation. It is trained on simulated crews in six mission profiles (Earth analog, ISS, Gateway,
+   lunar surface, Mars transit, Mars surface) with seven off-nominal events, where hazards physically shift
+   physiology and an explicit interaction prior (`ENV_COUPLING`, `DIST_AMPLIFIER` in `utils/synthetic_data.py`)
+   defines how much risk they add.
+3. **Counterfactual environmental uplift** — the service re-evaluates the same data in a benign Earth-like
+   environment; the difference ("+X points") and the most affected parameters are shown on the dashboard and
+   passed to Gemini, together with the communication delay (the advisor tells the crew to act autonomously when
+   the delay is long).
 
 ## ECG integration (TEKNOFEST V23)
 
@@ -143,7 +183,7 @@ piece-wise-linear interpolation: ideal → 8 %, normal limit → 40 %, caution l
 * Points: yellow 10 · red 25 · black 50, plus up to +12 for longer tasks. Each task pays out **once** (atomic, idempotent).
 * Level *L* starts at `60·(L−1)²` XP; ranks Cadet → Fleet Admiral; the sidebar and Missions tab show a live progress bar.
 * Streak = consecutive UTC days with ≥ 1 completed task.
-* 16 badges, e.g. *Hydration Hero*, *Iron Lungs*, *Bone Guardian*, *Code Black Survivor*, *Week in Orbit*.
+* 18 badges, e.g. *Hydration Hero*, *Iron Lungs*, *Bone Guardian*, *Storm Shelter*, *Habitat Keeper*, *Code Black Survivor*.
 * Tasks are not duplicated while open; they are re-issued only if a parameter gets *worse*.
 
 ## REST API
@@ -152,13 +192,14 @@ piece-wise-linear interpolation: ideal → 8 %, normal limit → 40 %, caution l
 
 | Method & path | Purpose |
 |---|---|
-| `POST /astronauts/{id}/assess?lang=en\|tr` | run a full assessment (values, sensor series, log, ECG) → risks, tasks, briefing |
+| `POST /astronauts/{id}/assess?lang=en\|tr` | run a full assessment (values incl. environment, sensor series, log, ECG) → health risk, environment block, tasks, briefing |
 | `GET /astronauts/{id}/latest` · `/history` | last assessment · overall-risk history |
 | `GET /astronauts/{id}/tasks?status=pending\|done` | task list |
 | `POST /astronauts/{id}/tasks/{task_id}/complete` | complete a task → points, level-up, new badges |
 | `GET /astronauts/{id}/gamification` | XP, level, rank, streak, badges |
 | `POST /astronauts/{id}/chat` | ask the advisor |
 | `POST /ecg/analyze` · `GET /ecg/sample/{CLASS}` · `GET /ecg/status` | ECG adapter |
+| `GET /environment/profiles?mission_day=90` | mission profiles (ISS, Gateway, Moon, Mars …) with environment values + off-nominal events |
 | `GET /parameters` · `/health` · `/badges` | registry, status |
 
 ## Project layout
@@ -167,27 +208,31 @@ piece-wise-linear interpolation: ideal → 8 %, normal limit → 40 %, caution l
 AstroGuard-X/
 ├── backend/
 │   ├── main.py            FastAPI app
-│   ├── service.py         orchestration: features → model → blend → tasks → persistence
+│   ├── service.py         orchestration: features → model → blend → environment uplift → tasks → persistence
 │   ├── ecg_adapter.py     TEKNOFEST V23 ECG integration + offline screening fallback
 │   ├── gemini_agent.py    Google GenAI SDK client, offline reasoner, output sanitiser
-│   ├── task_library.py    offline mitigation-task knowledge base
+│   ├── task_library.py    offline mitigation-task knowledge base (physiology + environment hazards)
 │   ├── gamification.py    XP, levels, streaks, badges
 │   ├── storage.py         SQLite persistence
 │   └── schemas.py         Pydantic models
 ├── models/
 │   ├── mamba2.py          Mamba-2 (SSD) encoder, pure PyTorch (+ optional mamba-ssm)
-│   ├── tcn_tft.py         TCN + Temporal Fusion Transformer trend encoder
-│   ├── fusion.py          cross-attention multimodal fusion
+│   ├── tcn_tft.py         TCN + Temporal Fusion Transformer trend encoder (batched variable GRNs)
+│   ├── environment.py     environment-hazard encoder + FiLM conditioning
+│   ├── fusion.py          cross-attention multimodal fusion (5 modalities)
 │   ├── physics.py         Neural ODE + PINN (fluid shift, bone, muscle, plasma volume)
 │   ├── uncertainty.py     Bayesian layers, MC dropout, aleatoric/epistemic split
 │   ├── rule_prior.py      differentiable reference-range score (residual-learning base)
-│   ├── astroguard.py      the full network
-│   └── train.py           training + evaluation (simulated crews)
+│   ├── astroguard.py      the full network (v2)
+│   ├── train.py           GPU training: EMA, ordinal band loss, early stopping on validation MCC
+│   ├── metrics.py         MCC / macro-F1 / QWK / safety metrics + crew-day bootstrap
+│   └── evaluate.py        held-out test, baselines, ablation, slices → docs/MODEL_EVALUATION.md
 ├── ui/                    Streamlit dashboard (app.py, components.py, theme.py, i18n.py, client.py)
-├── utils/                 reference_ranges.py · features.py · synthetic_data.py · subjective.py · telemetry.py · ecg_synth.py · config.py
+├── utils/                 reference_ranges.py · environment.py · features.py · synthetic_data.py · subjective.py · telemetry.py · ecg_synth.py · config.py
+├── docs/                  MODEL_EVALUATION.md · model_evaluation.json · img/ · ABOUT_UI.md · ci.yml
 ├── scripts/               setup.ps1 · setup.sh · publish_github.ps1 · publish_github.sh · git_init_fallback.py
-├── tests/                 pytest suite (models, ranges, gamification, service, API, ECG, UI)
-├── run.py                 launcher (ui | api | all | train | test | ecg)
+├── tests/                 pytest suite (models, ranges, environment, metrics, gamification, service, API, ECG, UI)
+├── run.py                 launcher (ui | api | all | train | evaluate | test | ecg)
 ├── requirements*.txt · Dockerfile · docker-compose.yml · .env.example · LICENSE · THIRD_PARTY_NOTICES.md
 ```
 
@@ -196,28 +241,49 @@ AstroGuard-X/
 | Component | Implementation | Role |
 |---|---|---|
 | **Mamba-2** | `models/mamba2.py` — chunked state-space-duality scan (validated against the step-by-step recurrence), causal conv, gated RMSNorm; swaps to `mamba-ssm` on CUDA | continuous HR / SpO₂ / BP / RR / temp / GSR window |
-| **TCN + TFT** | `models/tcn_tft.py` — dilated causal convs, Variable Selection, LSTM, interpretable multi-head attention, 7-day forecast head | 14-day physiological trend |
-| **Cross-attention fusion** | `models/fusion.py` — daily & subjective tokens read sensor/trend context, then Perceiver-style latent bottleneck; returns per-modality attention | combines sensors + daily inputs + subjective log |
-| **Neural ODE + PINN** | `models/physics.py` — physics prior (fluid shift, plasma volume, bone, muscle) + bounded neural correction, RK4; PINN residual, collocation and constraint losses | space-physiology projections (+30/90/180 days) |
+| **TCN + TFT** | `models/tcn_tft.py` — dilated causal convs, Variable Selection (43 variables, batched GRNs), LSTM, interpretable multi-head attention, 7-day forecast head | 14-day physiological + environment trend |
+| **Environment encoder + FiLM** | `models/environment.py` — one token per hazard from [z-score, hazard risk], self-attention between hazards, attention pooling, FiLM γ/β modulation of the fused state | radiation · isolation · distance · gravity · habitat |
+| **Cross-attention fusion** | `models/fusion.py` — daily & subjective tokens read sensor/trend/environment context, then Perceiver-style latent bottleneck; returns per-modality attention | combines 5 modalities |
+| **Neural ODE + PINN** | `models/physics.py` — physics prior (fluid shift, plasma volume, bone, muscle) + bounded neural correction, RK4; PINN residual, collocation and constraint losses; gravity from the environment input | space-physiology projections (+30/90/180 days) |
 | **Bayesian UQ** | `models/uncertainty.py` — Bayes-by-Backprop head, MC-dropout, heteroscedastic NLL → epistemic / aleatoric / 90 % interval | robust risk estimates |
-| **Gemini** | `backend/gemini_agent.py` — `google-genai`, structured JSON output | briefing + tasks |
+| **Gemini** | `backend/gemini_agent.py` — `google-genai`, structured JSON output, environment-aware prompt | briefing + tasks |
 
-Training (`python -m models.train --samples 3000 --epochs 10`, ~0.74 M parameters, CPU) uses simulated crews: 11 clinical
-scenarios ramping over 21 days, person-specific offsets, circadian sensor streams, bilingual subjective logs and hidden
-physiology multipliers that leak into biomarkers. Targets are the transparent range-based risks plus a documented
-interaction prior (`COUPLING` in `utils/synthetic_data.py`).
+Training (`python -m models.train --samples 32000 --epochs 45`, ~1.7 M parameters, CUDA GPU if available) uses simulated
+crews: 11 clinical scenarios + mixtures ramping over 21 days, 6 mission profiles and 7 off-nominal environment events,
+person-specific offsets, circadian sensor streams, bilingual subjective logs and hidden physiology multipliers that leak
+into biomarkers. Targets are the transparent range-based risks plus documented interaction priors (`COUPLING`,
+`SYMPTOM_COUPLING`, `ENV_COUPLING`, `DIST_AMPLIFIER` in `utils/synthetic_data.py`). Recipe: AdamW + OneCycle, KL
+annealing, an **ordinal band loss** at the 15/40/70/90 % colour thresholds (higher weight on red/black), an **EMA** of
+the weights and early stopping on validation MCC.
 
-### Validation (held-out simulated crews, seed-disjoint; 3000 train / 375 validation, 10 epochs, CPU)
+## Evaluation (held-out test)
 
-| Metric | Value |
-|---|---|
-| Risk MAE vs. simulator target | 0.77 % points |
-| Colour-band agreement (5 bands) | 96.4 % (macro-F1 0.91, quadratic κ 0.97) |
-| Predictions within 10 points | 99.98 % |
-| 90 % credible-interval coverage | 99.1 % (slightly conservative) |
-| 7-day forecast MAE | 5.4 % points |
+Evaluated on **6,000 unseen simulated crew-days** (seed `424242`, disjoint from training/validation; **258,000** parameter-level predictions across strongly imbalanced bands: gray 79,863 · green 125,956 · yellow 32,276 · red 15,977 · black 3,928) with **1,000 whole-crew-day bootstrap resamples** (`python run.py evaluate` → [`docs/MODEL_EVALUATION.md`](docs/MODEL_EVALUATION.md)).
 
-These numbers measure agreement with the *simulator's* targets (range score + interaction prior), **not** clinical accuracy.
+Why **Multi-class MCC** + **Macro-F1** + **Quadratic Weighted Kappa (QWK)** + **Critical Recall**: plain accuracy is inflated by normal `gray`/`green` readings; **MCC** uses the entire $5\times 5$ confusion matrix and is high only when every band performs well, **Macro-F1** weights rare `black` alarms equally with `gray`, **QWK** penalises multi-band errors quadratically, and **Critical Recall / Under-Triage** measures missed `red`/`black` alerts directly.
+
+**All 43 parameters (held-out test set):**
+
+| System | MCC [95 % CI] | Macro-F1 [95 % CI] | QWK | Critical recall | Under-triage | Actionable F1 | MAE (pp) |
+|---|---|---|---|---|---|---|---|
+| Rule-only (reference ranges) | 0.9032 [0.9016–0.9047] | 0.8839 [0.8808–0.8872] | 0.9599 | 0.8803 | 0.1197 | 0.9509 | 1.494 |
+| Ridge residual (scikit-learn) | 0.9550 [0.9540–0.9560] | 0.9485 [0.9466–0.9504] | 0.9824 | 0.9890 | 0.0110 | 0.9775 | 0.622 |
+| **AstroGuardNet v2** | **0.9788** [0.9782–0.9796] | **0.9767** [0.9752–0.9781] | **0.9916** | **0.9912** | **0.0088** | **0.9928** | **0.274** |
+| Deployed blend (0.20 rule + 0.80 model, safety floor) | 0.9680 [0.9672–0.9689] | 0.9570 [0.9548–0.9590] | 0.9872 | 0.9670 | 0.0330 | 0.9903 | 0.444 |
+
+**31 physiological health biomarkers only (fair environment-hazard ablation):**
+
+| System | MCC [95 % CI] | Macro-F1 [95 % CI] | QWK | Critical recall | Under-triage | MAE (pp) |
+|---|---|---|---|---|---|---|
+| Rule-only (reference ranges) | 0.8588 [0.8564–0.8609] | 0.7809 [0.7754–0.7868] | 0.9306 | 0.7286 | 0.2714 | 2.061 |
+| Ablation: v2 *without* environment inputs | 0.8977 [0.8959–0.8997] | 0.8527 [0.8478–0.8576] | 0.9515 | 0.8321 | 0.1679 | 1.441 |
+| Ridge residual (scikit-learn, with env) | 0.9358 [0.9343–0.9372] | 0.9141 [0.9109–0.9170] | 0.9713 | 0.9792 | 0.0208 | 0.837 |
+| **AstroGuardNet v2 (with 12 RIDGE hazards)** | **0.9701** [0.9692–0.9712] | **0.9611** [0.9584–0.9635] | **0.9864** | **0.9801** | **0.0199** | **0.353** |
+
+Paired bootstrap significance ($P(\Delta\text{MCC} \le 0) < 0.001$ for every comparison): adding the 12 NASA RIDGE environment inputs boosts physiological biomarker MCC by **+0.0724** (`95 % CI [+0.0707, +0.0742]`) and cuts missed critical physiological alarms from **16.8 % → 2.0 %** (+14.8 percentage points critical recall). See [`docs/MODEL_EVALUATION.md`](docs/MODEL_EVALUATION.md) for per-event and per-mission-profile slices.
+
+![Confusion matrices](docs/img/confusion_matrix.png)
+![MCC by environment event](docs/img/mcc_by_event.png)
 
 ## Testing
 
@@ -225,10 +291,11 @@ These numbers measure agreement with the *simulator's* targets (range score + in
 python run.py test        # or: pytest -q
 ```
 
-The suite checks, among others: SSD scan == naive recurrence · RK4 vs. closed-form physics · PINN losses differentiable ·
+The suite (185+ tests) checks, among others: SSD scan == naive recurrence · RK4 vs. closed-form physics · PINN losses differentiable ·
 torch rule score == NumPy rule score · exact colour boundaries (<15 / 15–40 / 40–70 / 70–90 / >90) · monotone risk curves for
-all 31 parameters · task generation, de-duplication and escalation · idempotent XP · safety floor · REST flow · ECG adapter
-fallback and payload mapping · Gemini output sanitiser & circuit breaker · the Streamlit UI end-to-end (AppTest).
+all 43 parameters · environment risk mapping, interaction prior and side-specific hazards · health risk excludes environment ·
+MCC / macro-F1 / QWK == scikit-learn · task generation, de-duplication and escalation · idempotent XP · safety floor · REST flow ·
+ECG adapter fallback and payload mapping · Gemini output sanitiser & circuit breaker · the Streamlit UI end-to-end (AppTest).
 
 ## Deployment
 

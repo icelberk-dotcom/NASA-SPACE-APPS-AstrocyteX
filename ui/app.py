@@ -22,9 +22,10 @@ from ui import components as C  # noqa: E402
 from ui.client import make_client  # noqa: E402
 from ui.i18n import lang, t  # noqa: E402
 from ui.theme import dot, esc, inject_css  # noqa: E402
-from utils.features import GRAVITY_PRESETS  # noqa: E402
-from utils.reference_ranges import (CATEGORIES, DEFAULT_VALUES, PARAM_KEYS, PARAMETERS, SEQ_KEYS,  # noqa: E402
-                                    params_in_category, risk_level, risk_percent)
+from utils.environment import (ENV_EVENTS, EVENT_NAMES, MISSION_PROFILES, PROFILE_NAMES,  # noqa: E402
+                               derived_environment, environment_preset, event_log)
+from utils.reference_ranges import (CATEGORIES, DEFAULT_VALUES, ENV_CATEGORIES, ENV_KEYS, PARAM_KEYS,  # noqa: E402
+                                    PARAMETERS, SEQ_KEYS, params_in_category, risk_level, risk_percent)
 from utils.synthetic_data import SCENARIO_NAMES, scenario_log, scenario_preset  # noqa: E402
 from utils.telemetry import TelemetrySimulator  # noqa: E402
 
@@ -50,10 +51,15 @@ def init_state() -> None:
     ss.setdefault("events", [])
     ss.setdefault("subj_log", "")
     ss.setdefault("mission_day", 90)
-    ss.setdefault("gravity_name", "Microgravity (ISS)")
+    ss.setdefault("profile_name", "iss_leo")
+    ss.setdefault("event_name", EVENT_NAMES[0])
     ss.setdefault("stream_on", False)
     for p in PARAMETERS:  # one widget key per parameter, pre-filled with the ideal value
         ss.setdefault(f"val_{p.key}", float(p.ideal))
+    if not ss.get("env_initialised"):  # environment widgets start from the default mission profile (ISS)
+        for k, v in environment_preset(ss["profile_name"], ss["mission_day"]).items():
+            ss[f"val_{k}"] = float(v)
+        ss["env_initialised"] = True
     if "telemetry" not in ss:
         sim = TelemetrySimulator({k: DEFAULT_VALUES[k] for k in SEQ_KEYS})
         sim.fill()
@@ -76,6 +82,23 @@ def cb_apply_preset() -> None:
     ss["subj_log"] = scenario_log(name, lang())
     ss["telemetry"].set_baseline({k: ss[f"val_{k}"] for k in SEQ_KEYS})
     ss["telemetry"].fill()
+
+
+def cb_apply_profile() -> None:
+    """Fill the 12 environment inputs from the selected mission profile and mission day."""
+    for k, v in environment_preset(ss["profile_name"], ss["mission_day"]).items():
+        ss[f"val_{k}"] = float(v)
+
+
+def cb_apply_event() -> None:
+    """Add an off-nominal environment event (radiation storm, CO2 scrubber failure ...) to the current inputs."""
+    from utils.environment import apply_event
+
+    current = {k: float(ss[f"val_{k}"]) for k in ENV_KEYS}
+    for k, v in apply_event(current, ss["event_name"]).items():
+        ss[f"val_{k}"] = float(v)
+    log = event_log(ss["event_name"], lang())
+    ss["subj_log"] = (ss["subj_log"] + " " + log).strip() if log not in ss["subj_log"] else ss["subj_log"]
 
 
 def cb_sync_telemetry() -> None:
@@ -116,7 +139,7 @@ def run_assessment() -> None:
         "values": current_values(),
         "sensor_series": sim.series() if len(sim.buffers["heart_rate"]) > 8 else None,
         "subjective_log": ss["subj_log"], "mission_day": float(ss["mission_day"]),
-        "gravity": GRAVITY_PRESETS[ss["gravity_name"]], "ecg": ss.get("ecg_result"), "save": True,
+        "gravity": float(ss["val_gravity_g"]), "ecg": ss.get("ecg_result"), "save": True,
     }
     with st.spinner(t("analyzing")):
         ss["assessment"] = client.assess(ss["aid"], payload, lang())
@@ -138,8 +161,14 @@ with st.sidebar:
     st.selectbox(t("language"), ["en", "tr"], key="lang", format_func=lambda x: {"en": "English", "tr": "Türkçe"}[x])
     st.text_input(t("astronaut_id"), key="aid")
     st.markdown(f"**{t('environment')}**")
-    st.selectbox(t("gravity"), list(GRAVITY_PRESETS), key="gravity_name")
-    st.slider(t("mission_day"), 0, 180, key="mission_day")
+    st.selectbox(t("mission_profile"), PROFILE_NAMES, key="profile_name", on_change=cb_apply_profile,
+                 format_func=lambda n: MISSION_PROFILES[n]["tr" if lang() == "tr" else "en"])
+    st.slider(t("mission_day"), 0, 900, key="mission_day", on_change=cb_apply_profile)
+    der = derived_environment({"earth_distance_mkm": ss["val_earth_distance_mkm"]})
+    delay = der["comm_delay_s"] or 0.0
+    st.caption(f"🪐 {ss['val_gravity_g']:.2f} g · 🌍 {ss['val_earth_distance_mkm']:.3f}×10⁶ km · "
+               f"📡 {t('comm_delay')}: {delay:.1f} s" + (f" (~{delay / 60:.0f} min)" if delay > 90 else "")
+               + f" · ☢️ {ss['val_radiation_dose_msv_d']:.2f} mSv/{t('day')}")
     try:
         gam = client.gamification(ss["aid"])
         st.markdown(C.xp_card_html(gam), unsafe_allow_html=True)
@@ -201,6 +230,30 @@ with tabs[0]:
                 st.markdown(f"- {r}")
             st.caption(f"source: {A['advisor']['source']}")
         st.markdown(C.legend_html(), unsafe_allow_html=True)
+
+        E = A.get("environment") or {}
+        if E:
+            st.markdown(f"#### {t('env_title')}")
+            e1, e2 = st.columns([1.0, 2.4])
+            with e1:
+                st.markdown(f"{dot(E['level'], True)}**{t('env_hazard_index')}**", unsafe_allow_html=True)
+                st.plotly_chart(C.gauge({"risk_pct": E["hazard_index_pct"]}, height=200), use_container_width=True, key="env_gauge")
+            with e2:
+                C.cards_grid(st, E["themes"])
+                m1, m2, m3 = st.columns(3)
+                up = E.get("uplift")
+                if up:
+                    m1.metric(t("env_uplift"), f"{up['uplift_pts']:+.1f} pts",
+                              help=t("env_uplift_help", base=up["overall_neutral_env_pct"], act=up["overall_model_pct"]))
+                d = E.get("derived", {})
+                if d.get("comm_delay_s") is not None:
+                    m2.metric(t("comm_delay"), f"{d['comm_delay_s']:.1f} s" if d["comm_delay_s"] < 90 else f"{d['comm_delay_s'] / 60:.1f} min")
+                if d.get("time_to_care_days") is not None:
+                    m3.metric(t("time_to_care"), f"{d['time_to_care_days']:g} {t('days')}")
+                if up and up["top_parameters"]:
+                    names = ", ".join(f"{(p['name_tr'] if lang() == 'tr' else p['name'])} (+{p['uplift_pts']:.0f})" for p in up["top_parameters"])
+                    st.caption(f"{t('env_affects')}: {names}")
+
         st.markdown(f"#### {t('systems')}")
         C.systems_grid(st, A)
         st.markdown(f"#### {t('parameters')}")
@@ -208,6 +261,8 @@ with tabs[0]:
         for p in A["parameters"]:
             by_cat.setdefault(p["category"], []).append(p)
         for cat, params in by_cat.items():
+            if cat in ENV_CATEGORIES and cat == ENV_CATEGORIES[0]:
+                st.markdown(f"##### {t('env_section')}")
             worst = max((p["risk_pct"] or 0) for p in params)
             label = CATEGORIES[cat]["tr" if lang() == "tr" else "en"]
             with st.expander(f"{CATEGORIES[cat]['icon']} {label}  ·  max {worst:.0f}%", expanded=worst > 40):
@@ -219,10 +274,18 @@ with tabs[1]:
     top[0].selectbox(t("demo_preset"), SCENARIO_NAMES, key="preset_name")
     top[1].button(t("apply_preset"), on_click=cb_apply_preset, key="apply_preset")
     top[2].button(t("run_assessment"), type="primary", key="run_input", on_click=run_assessment)
+    env_row = st.columns([2, 1.2, 1.2])
+    env_row[0].selectbox(t("env_event"), EVENT_NAMES, key="event_name",
+                         format_func=lambda n: ENV_EVENTS[n]["tr" if lang() == "tr" else "en"])
+    env_row[1].button(t("apply_event"), on_click=cb_apply_event, key="apply_event")
+    env_row[2].button(t("apply_profile"), on_click=cb_apply_profile, key="apply_profile")
     st.markdown(C.legend_html(), unsafe_allow_html=True)
 
     for cat in CATEGORIES:
         params = params_in_category(cat)
+        if cat == ENV_CATEGORIES[0]:
+            st.markdown(f"#### {t('env_section')}")
+            st.caption(t("env_section_help"))
         label = CATEGORIES[cat]["tr" if lang() == "tr" else "en"]
         worst = max(risk_percent(p.key, ss[f"val_{p.key}"]) or 0 for p in params)
         with st.expander(f"{CATEGORIES[cat]['icon']} {label}", expanded=worst > 40 or cat in ("cardiovascular", "respiratory")):
@@ -374,6 +437,13 @@ with tabs[4]:
         if A["trend_drivers"]:
             c2.plotly_chart(C.bars({d["name"]: round(d["weight"] * 100, 1) for d in A["trend_drivers"]}, t("drivers") + " (%)", "#34a853"),
                             use_container_width=True, key="drivers")
+        haz = (A.get("environment") or {}).get("hazard_attention")
+        if haz:
+            from utils.reference_ranges import PARAM_BY_KEY
+
+            top_h = dict(sorted(haz.items(), key=lambda kv: -kv[1])[:8])
+            st.plotly_chart(C.bars({PARAM_BY_KEY[k].name(lang()): round(v * 100, 1) for k, v in top_h.items()},
+                                   t("hazard_attention") + " (%)", "#f39c12"), use_container_width=True, key="hazard_attn")
 
 # ============================================================================ AI ADVISOR
 with tabs[5]:

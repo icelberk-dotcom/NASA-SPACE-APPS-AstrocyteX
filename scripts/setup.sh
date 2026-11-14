@@ -26,9 +26,9 @@ if [ "$GPU" = 1 ]; then $PY -m pip install -r requirements-gpu.txt || echo "mamb
 
 [ -f .env ] || { cp .env.example .env; echo "Created .env (GEMINI_API_KEY / ECG_PACKAGE_PATH are optional)."; }
 
-if [ "$SKIP_TRAIN" = 0 ] && [ ! -f checkpoints/astroguard_v1.pt ]; then
+if [ "$SKIP_TRAIN" = 0 ] && [ ! -f checkpoints/astroguard_v2.pt ]; then
   step "Training AstroGuard-X on simulated crews"
-  $PY -m models.train --samples 3000 --epochs 10
+  $PY -m models.train --samples 12000 --epochs 25
 fi
 if [ "$SKIP_TESTS" = 0 ]; then step "Running unit tests"; $PY -m pytest -q; fi
 

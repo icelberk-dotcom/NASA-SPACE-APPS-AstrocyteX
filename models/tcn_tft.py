@@ -89,22 +89,48 @@ class GatedResidualNetwork(nn.Module):
         return self.norm(self.skip(x) + self.glu(self.drop(h)))
 
 
+class BatchedVariableGRN(nn.Module):
+    """One independent GRN per variable, evaluated for all variables at once.
+
+    Mathematically identical to ``nn.ModuleList([GatedResidualNetwork(d, d, d) ...])`` but the
+    V small networks are stored as stacked weight tensors and applied with ``einsum`` - one
+    kernel instead of V module calls, which matters with 43 variables.
+    """
+
+    def __init__(self, n_vars: int, d_model: int, dropout: float = 0.1):
+        super().__init__()
+        v, d = n_vars, d_model
+        init = lambda *shape: nn.Parameter(torch.randn(*shape) / shape[-2] ** 0.5)  # noqa: E731
+        self.w1, self.b1 = init(v, d, d), nn.Parameter(torch.zeros(v, d))
+        self.w2, self.b2 = init(v, d, d), nn.Parameter(torch.zeros(v, d))
+        self.wg, self.bg = init(v, d, 2 * d), nn.Parameter(torch.zeros(v, 2 * d))
+        self.ln_w, self.ln_b = nn.Parameter(torch.ones(v, d)), nn.Parameter(torch.zeros(v, d))
+        self.drop = nn.Dropout(dropout)
+        self.d = d
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (..., V, d)
+        h = torch.einsum("...vd,vdh->...vh", x, self.w1) + self.b1
+        h = torch.einsum("...vd,vdh->...vh", F.elu(h), self.w2) + self.b2
+        g = F.glu(torch.einsum("...vd,vdh->...vh", self.drop(h), self.wg) + self.bg, dim=-1)
+        return F.layer_norm(x + g, (self.d,)) * self.ln_w + self.ln_b
+
+
 class VariableSelectionNetwork(nn.Module):
     """Embed every scalar variable separately and weight them with a learned softmax."""
 
     def __init__(self, n_vars: int, d_model: int, dropout: float = 0.1):
         super().__init__()
         self.n_vars = n_vars
-        # One small embedding per variable (value -> d_model), vectorised with einsum.
+        # One small embedding per variable (value -> d_model), vectorised with broadcasting.
         self.emb_w = nn.Parameter(torch.randn(n_vars, d_model) * 0.2)
         self.emb_b = nn.Parameter(torch.zeros(n_vars, d_model))
-        self.var_grns = nn.ModuleList([GatedResidualNetwork(d_model, d_model, d_model, dropout) for _ in range(n_vars)])
+        self.var_grns = BatchedVariableGRN(n_vars, d_model, dropout)
         self.weight_grn = GatedResidualNetwork(n_vars * d_model, d_model, n_vars, dropout)
 
     def forward(self, x: torch.Tensor):
         # x: (B, T, V) -> embeddings (B, T, V, d)
         emb = x.unsqueeze(-1) * self.emb_w + self.emb_b
-        processed = torch.stack([g(emb[..., i, :]) for i, g in enumerate(self.var_grns)], dim=-2)
+        processed = self.var_grns(emb)
         weights = torch.softmax(self.weight_grn(emb.flatten(-2)), dim=-1)  # (B, T, V)
         out = (processed * weights.unsqueeze(-1)).sum(dim=-2)
         return out, weights
@@ -159,6 +185,7 @@ class TrendEncoder(nn.Module):
         # history: (B, H, V)
         x, var_weights = self.vsn(history)  # which variables matter
         x = x + self.tcn(x)  # local multi-scale temporal patterns
+        self.lstm.flatten_parameters()  # keep cuDNN weights contiguous (e.g. after EMA deep-copies)
         lstm_out, _ = self.lstm(x)
         x = self.norm1(x + self.post_lstm_gate(lstm_out))
         attn_out, attn_w = self.attn(x)

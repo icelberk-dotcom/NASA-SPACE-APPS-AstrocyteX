@@ -68,6 +68,19 @@ def parameters() -> Dict[str, Any]:
     }
 
 
+@app.get("/environment/profiles", tags=["meta"])
+def environment_profiles(mission_day: float = Query(90.0, ge=0, le=1500)) -> Dict[str, Any]:
+    """Mission profiles (ISS, Gateway, Moon, Mars ...) with their environment values, plus off-nominal events."""
+    from utils.environment import ENV_EVENTS, MISSION_PROFILES, derived_environment, environment_preset
+
+    profiles = {}
+    for name, prof in MISSION_PROFILES.items():
+        vals = environment_preset(name, mission_day)
+        profiles[name] = {"en": prof["en"], "tr": prof["tr"], "values": vals, "derived": derived_environment(vals)}
+    return {"mission_day": mission_day, "profiles": profiles,
+            "events": {k: {"en": v["en"], "tr": v["tr"]} for k, v in ENV_EVENTS.items()}}
+
+
 # ------------------------------------------------------------------ assessment
 @app.post("/astronauts/{astronaut_id}/assess", response_model=Assessment, tags=["assessment"])
 def assess(astronaut_id: str, reading: ReadingIn, lang: str = Query("en", pattern="^(en|tr)$")) -> Assessment:
