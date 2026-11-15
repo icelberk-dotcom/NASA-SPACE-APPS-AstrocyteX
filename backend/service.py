@@ -1,25 +1,13 @@
 """
-AstroGuard-X service layer - the single place where all components meet.
+AstrocyteX service layer - the single place where all components meet.
 
-    reading â”€â”€â–º feature builder â”€â”€â–º AstroGuardNet (Mamba-2 | TCN+TFT | fusion | ODE/PINN | Bayesian)
-                                         â”‚
-    reference ranges (transparent) â”€â”€â”€â”€â”€â”€â”¼â”€â”€â–º blended risk % + uncertainty â”€â”€â–º colour indicators
-                                         â”‚
-    ECG adapter (Teknofest V23) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                    â”‚
-                                                              â–¼
-              Gemini / offline reasoner â”€â”€â–º briefing + mitigation tasks â”€â”€â–º gamification
-
-Both the FastAPI app and the Streamlit UI call this class, so behaviour is identical whether
-the UI runs in-process or talks to the REST API.
-
-How the displayed risk is computed
-----------------------------------
-For every parameter ``risk = a * rule + (1 - a) * model`` where ``rule`` is the transparent
-reference-range score and ``model`` the Monte-Carlo mean of the neural network
-(``a = ASTROGUARD_RULE_BLEND``, default 0.65).  The network can therefore *raise* concern for
-interactions (poor sleep + high stress markers, symptoms in the log ...) but a clearly
-abnormal value can never be hidden: if the rule score is already red/black (>= 70 %) the final
-score is never below it (safety floor).
+    reading -> feature builder -> AstrocyteX-Net v3.0 (Mamba-2 | TCN+TFT | fusion | ODE/PINN | Bayesian)
+                                         |
+    reference ranges (transparent) ------+--> blended risk % + uncertainty --> colour indicators
+                                         |
+    ECG adapter + AstroVoiceNet v1.0 ----'                    |
+                                                              v
+         Gemini / offline reasoner (doctor / non_doctor) --> briefing + mitigation tasks --> gamification
 """
 from __future__ import annotations
 
@@ -32,10 +20,12 @@ import torch
 
 from backend.ecg_adapter import ECGAdapter, ECGResult
 from backend.gamification import Gamification, task_points
-from backend.gemini_agent import GeminiAdvisor
+from backend.gemini_agent import GeminiAdvisor, is_turkish_text
 from backend.schemas import (Assessment, CompletionResult, GamificationState, ParameterAssessment,
                              ReadingIn, TaskDraft, TaskOut)
 from backend.storage import Storage, utcnow
+from backend.task_library import templates_for
+from backend.voice_analyzer import VoiceAnalyzer
 from models.astroguard import AstroGuardNet, MODEL_VERSION, load_checkpoint
 from models.fusion import MODALITIES
 from models.physics import STATE_NAMES
@@ -57,12 +47,14 @@ MC_SEED = 1234  # common random numbers: actual vs. counterfactual predictions u
 class AstroGuardService:
     def __init__(self, settings: Optional[Settings] = None, model: Optional[AstroGuardNet] = None,
                  load_model: bool = True, advisor: Optional[GeminiAdvisor] = None,
-                 ecg: Optional[ECGAdapter] = None, storage: Optional[Storage] = None):
+                 ecg: Optional[ECGAdapter] = None, voice: Optional[VoiceAnalyzer] = None,
+                 storage: Optional[Storage] = None):
         self.settings = settings or get_settings()
         self.storage = storage or Storage(self.settings.db_path)
         self.gamification = Gamification(self.storage)
         self.advisor = advisor or GeminiAdvisor(self.settings)
         self.ecg = ecg or ECGAdapter(self.settings)
+        self.voice = voice or VoiceAnalyzer(self.settings, load_model=load_model)
         self.encoder = SubjectiveEncoder(self.settings.subjective_backend)
         self._lock = threading.Lock()
         self.model: Optional[AstroGuardNet] = model
@@ -198,17 +190,40 @@ class AstroGuardService:
                 level=level, color=level_color(level), direction=risk_direction(p.key, value)))
 
         # ---- aggregates ----------------------------------------------------------------
-        # Overall HEALTH risk = physiological parameters only.  The environment acts on it through
-        # the network (per-parameter model risks) and is reported separately below.
-        overall_pct = health_overall_risk(final_risks)
+        # Overall HEALTH risk = physiological parameters fused with vocal prosody risk (if voice provided).
+        phys_overall_pct = health_overall_risk(final_risks)
+        overall_pct = phys_overall_pct
         o_lo = o_hi = overall_pct
         if pred is not None:
             m, lo, hi = float(pred["risk"][0, -1]), float(pred["ci_low"][0, -1]), float(pred["ci_high"][0, -1])
             o_lo, o_hi = max(0.0, overall_pct - (1 - a) * (m - lo)), min(100.0, overall_pct + (1 - a) * (hi - m))
+
+        voice_dict: Optional[Dict[str, Any]] = reading.voice if reading.voice else None
+        if voice_dict and voice_dict.get("voice_risk_pct") is not None:
+            v_risk = float(np.clip(voice_dict["voice_risk_pct"], 0.0, 100.0))
+            fused = 0.78 * phys_overall_pct + 0.22 * v_risk
+            if v_risk >= 75.0:
+                fused = max(fused, 0.62 * v_risk + 0.38 * phys_overall_pct)
+            shift = fused - overall_pct
+            overall_pct = float(np.clip(fused, 0.0, 100.0))
+            o_lo = float(np.clip(o_lo + shift, 0.0, 100.0))
+            o_hi = float(np.clip(o_hi + shift, 0.0, 100.0))
+
         overall_level = risk_level(overall_pct)
-        overall = {"risk_pct": round(overall_pct, 1), "level": overall_level, "color": level_color(overall_level),
-                   "ci_low": round(o_lo, 1), "ci_high": round(o_hi, 1),
-                   "n_at_risk": sum(1 for p in params_out if p.level in RISKY_LEVELS and p.kind != "environment")}
+        overall: Dict[str, Any] = {
+            "risk_pct": round(overall_pct, 1),
+            "physiological_risk_pct": round(phys_overall_pct, 1),
+            "level": overall_level,
+            "color": level_color(overall_level),
+            "ci_low": round(o_lo, 1),
+            "ci_high": round(o_hi, 1),
+            "n_at_risk": sum(1 for p in params_out if p.level in RISKY_LEVELS and p.kind != "environment"),
+        }
+        if voice_dict and voice_dict.get("voice_risk_pct") is not None:
+            v_r = float(voice_dict["voice_risk_pct"])
+            overall["voice_risk_pct"] = round(v_r, 1)
+            overall["voice_level"] = str(voice_dict.get("level") or risk_level(v_r))
+            overall["voice_state"] = voice_dict.get("state_key")
 
         def _cat_card(cat: str, r: float) -> Dict[str, Any]:
             lv = risk_level(r)
@@ -243,6 +258,7 @@ class AstroGuardService:
                 drivers.append({"key": PARAM_KEYS[j], "name": PARAMETERS[j].name_en, "weight": round(float(w[j]), 3)})
 
         # ---- Gemini / offline reasoning + tasks -------------------------------------
+        role = reading.user_role if reading.user_role in ("doctor", "non_doctor") else "non_doctor"
         at_risk = [{"key": p.key, "name": p.name, "value": p.value, "unit": p.unit, "risk_pct": p.risk_pct,
                     "level": p.level, "direction": p.direction, "normal_range": p.normal_range,
                     "kind": "environment" if p.kind == "environment" else "health"}
@@ -252,18 +268,20 @@ class AstroGuardService:
                    "symptoms_in_log": symptoms, "subjective_log": reading.subjective_log[:600],
                    "mission_day": reading.mission_day, "gravity_fraction": gravity, "forecast_7d_risk_pct": forecast,
                    "space_physiology_projection": physics.get("projections", {}), "ecg": _ecg_brief(ecg_dict),
-                   "environment": _env_brief(environment, known)}
-        advice, source = self.advisor.reason(context, lang)
+                   "voice": _voice_brief(voice_dict), "environment": _env_brief(environment, known)}
+        advice, source = self.advisor.reason(context, lang, role=role)
         new_tasks = self._create_tasks(astronaut_id, advice.tasks, params_out, source)
+        if voice_dict:
+            new_tasks.extend(self._create_voice_tasks(astronaut_id, voice_dict, lang, source))
 
         meta = getattr(self.model, "meta", {}) if self.model else {}
         assessment = Assessment(
             astronaut_id=astronaut_id, timestamp=utcnow(), model_version=MODEL_VERSION if self.model else "rules-only",
             model_trained_on=str(meta.get("data", "n/a")), overall=overall, systems=systems, parameters=params_out,
             forecast=forecast, physics=physics, modality_attention=modality, trend_drivers=drivers, ecg=ecg_dict,
-            environment=environment,
+            voice=voice_dict, environment=environment,
             advisor={"summary": advice.summary, "recommendations": advice.recommendations, "source": source,
-                     "escalate": advice.escalate_to_flight_surgeon, "gemini": self.advisor.status()},
+                     "user_role": role, "escalate": advice.escalate_to_flight_surgeon, "gemini": self.advisor.status()},
             new_tasks=new_tasks, subjective_symptoms=symptoms)
         if reading.save:
             self.storage.add_reading(astronaut_id, {k: float(v) for k, v in known.items()}, assessment.model_dump(mode="json"))
@@ -313,8 +331,78 @@ class AstroGuardService:
             created.append(TaskOut(**self.storage.get_task(tid)))
         return created
 
-    def list_tasks(self, astronaut_id: str, status: Optional[str] = None) -> List[TaskOut]:
-        return [TaskOut(**t) for t in self.storage.list_tasks(astronaut_id, status)]
+    def _create_voice_tasks(self, astronaut_id: str, voice: Dict[str, Any], lang: str, source: str) -> List[TaskOut]:
+        v_risk = float(voice.get("voice_risk_pct") or 0.0)
+        v_lvl = str(voice.get("level") or risk_level(v_risk))
+        if v_lvl not in RISKY_LEVELS:
+            return []
+        pending = self.storage.list_tasks(astronaut_id, "pending")
+        pending_titles = {t["title"].strip().lower() for t in pending}
+        worst_voice = max((LEVEL_ORDER.get(t["severity_level"], -1) for t in pending if t["parameter_key"] == "voice_prosody"), default=-1)
+        if worst_voice >= LEVEL_ORDER.get(v_lvl, 0):
+            return []
+
+        state_key = str(voice.get("state_key") or "acute_stress")
+        templates_tr = {
+            "cognitive_fatigue": ("20 dk kontrollü dinlenme ve vokal yeniden kontrol", "Bilişsel yükü düşürmek için loş kabinde 20 dakika gözleri dinlendirin, 300 ml su için ve ses kaydını tekrarlayın.", 20, "sleep"),
+            "acute_stress": ("12 dk rezonans solunumu ve vokal stres regülasyonu", "Dakikada 6 nefes (4 sn al, 6 sn ver) protokolüyle sempatik tonusu düşürün, ardından vokal kontrol kaydı alın.", 12, "breathing"),
+            "low_mood_isolation": ("15 dk yapılandırılmış sosyal bağlantı ve günlük kaydı", "Mürettebat arkadaşı veya yer destek ekibiyle kısa sesli/görüntülü temas kurun ve ruh hali notu ekleyin.", 15, "wellbeing"),
+            "dyspnea_hypoxic": ("Solunum kontrolü, SpO2 ve kabin CO2 doğrulaması", "Oturur pozisyona geçin, nabız oksimetresi ile SpO2 ölçün, kabin CO2 seviyesini kontrol edin ve uçuş cerrahına bildirin.", 10, "medical"),
+        }
+        templates_en = {
+            "cognitive_fatigue": ("20 min cognitive rest & vocal re-check", "Rest in low cabin lighting for 20 minutes, drink 300 ml water, and record a follow-up voice check.", 20, "sleep"),
+            "acute_stress": ("12 min paced resonance breathing & voice re-check", "Perform 6 breaths/min paced breathing (4 s inhale, 6 s exhale) to lower vocal tension, then re-record.", 12, "breathing"),
+            "low_mood_isolation": ("15 min crew/ground connection & wellbeing log", "Hold a brief supportive check-in with a crewmate or ground support and log your mood.", 15, "wellbeing"),
+            "dyspnea_hypoxic": ("Verify SpO2, cabin CO2 & contact flight surgeon", "Sit upright, check pulse oximetry SpO2 and cabin pCO2 immediately, and notify the flight surgeon.", 10, "medical"),
+        }
+        table = templates_tr if lang == "tr" else templates_en
+        title, desc, mins, tag = table.get(state_key, table["acute_stress"])
+        if title.strip().lower() in pending_titles:
+            return []
+        row = {
+            "parameter_key": "voice_prosody",
+            "title": title,
+            "description": desc,
+            "severity_level": v_lvl,
+            "risk_pct": round(v_risk, 1),
+            "duration_min": mins,
+            "points": task_points(v_lvl, mins),
+            "tag": tag,
+            "source": source,
+        }
+        tid = self.storage.add_task(astronaut_id, row)
+        return [TaskOut(**self.storage.get_task(tid))]
+
+    def list_tasks(self, astronaut_id: str, status: Optional[str] = None, lang: str = "en") -> List[TaskOut]:
+        rows = self.storage.list_tasks(astronaut_id, status)
+        if lang != "tr":
+            out_rows: List[Dict[str, Any]] = []
+            for r in rows:
+                if is_turkish_text(r.get("title", "")) or is_turkish_text(r.get("description", "")):
+                    r = self._translate_task_row_to_en(r)
+                out_rows.append(r)
+            rows = out_rows
+        return [TaskOut(**t) for t in rows]
+
+    def _translate_task_row_to_en(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        key = row.get("parameter_key", "")
+        tag = row.get("tag", "")
+        if key == "voice_prosody":
+            voice_by_tag = {
+                "sleep": ("20 min cognitive rest & vocal re-check", "Rest in low cabin lighting for 20 minutes, drink 300 ml water, and record a follow-up voice check.", "sleep"),
+                "breathing": ("12 min paced resonance breathing & voice re-check", "Perform 6 breaths/min paced breathing (4 s inhale, 6 s exhale) to lower vocal tension, then re-record.", "breathing"),
+                "wellbeing": ("15 min crew/ground connection & wellbeing log", "Hold a brief supportive check-in with a crewmate or ground support and log your mood.", "wellbeing"),
+                "medical": ("Verify SpO2, cabin CO2 & contact flight surgeon", "Sit upright, check pulse oximetry SpO2 and cabin pCO2 immediately, and notify the flight surgeon.", "medical"),
+            }
+            title, desc, new_tag = voice_by_tag.get(tag, voice_by_tag["breathing"])
+        else:
+            candidates = [*templates_for(key, "high"), *templates_for(key, "low")]
+            matched = next((c for c in candidates if c[3] == tag), candidates[0])
+            title, desc, _, new_tag = matched
+        updated = {**row, "title": title, "description": desc, "tag": new_tag}
+        if row.get("id") is not None:
+            self.storage.update_task_text(int(row["id"]), title, desc, new_tag)
+        return updated
 
     def complete_task(self, astronaut_id: str, task_id: int) -> CompletionResult:
         return self.gamification.complete_task(astronaut_id, task_id)
@@ -330,14 +418,23 @@ class AstroGuardService:
     def risk_history(self, astronaut_id: str, n: int = 60) -> List[Dict[str, Any]]:
         return self.storage.risk_history(astronaut_id, n)
 
-    def chat(self, astronaut_id: str, question: str, lang: str = "en") -> Dict[str, str]:
+    def chat(self, astronaut_id: str, question: str, lang: str = "en", role: str = "non_doctor") -> Dict[str, str]:
+        role_norm = "doctor" if role == "doctor" else "non_doctor"
         latest = self.latest(astronaut_id) or {}
-        at_risk = [{"key": p["key"], "name": p["name"], "value": p["value"], "risk_pct": p["risk_pct"], "level": p["level"],
-                    "direction": p["direction"]} for p in latest.get("parameters", []) if p["level"] in RISKY_LEVELS]
+        at_risk = [{"key": p["key"], "name": p["name"], "value": p["value"], "unit": p.get("unit", ""),
+                    "risk_pct": p["risk_pct"], "level": p["level"], "direction": p["direction"]}
+                   for p in latest.get("parameters", []) if p["level"] in RISKY_LEVELS]
+        env_raw = latest.get("environment") or {}
+        env_ctx = {
+            "hazard_index_pct": env_raw.get("hazard_index_pct", 0),
+            "one_way_comm_delay_s": (env_raw.get("derived") or {}).get("comm_delay_s"),
+            "environment_uplift_of_health_risk_pts": (env_raw.get("uplift") or {}).get("uplift_pts"),
+        } if env_raw else None
         ctx = {"overall_risk_pct": latest.get("overall", {}).get("risk_pct", 0), "at_risk": at_risk,
-               "symptoms_in_log": latest.get("subjective_symptoms", []), "forecast_7d_risk_pct": latest.get("forecast", [])}
-        answer, source = self.advisor.chat(question, ctx, lang)
-        return {"answer": answer, "source": source}
+               "symptoms_in_log": latest.get("subjective_symptoms", []), "forecast_7d_risk_pct": latest.get("forecast", []),
+               "voice": _voice_brief(latest.get("voice")), "environment": env_ctx}
+        answer, source = self.advisor.chat(question, ctx, lang, role=role_norm)
+        return {"answer": answer, "source": source, "role": role_norm}
 
     # ECG ----------------------------------------------------------------------
     def ecg_status(self) -> Dict[str, Any]:
@@ -350,6 +447,17 @@ class AstroGuardService:
     def ecg_sample(self, class_code: str = "NORMAL") -> Dict[str, Any]:
         res = self.ecg.sample(class_code)
         return {**res.to_dict(), "parameter_values": res.parameter_values()}
+
+    # Voice --------------------------------------------------------------------
+    def voice_status(self) -> Dict[str, Any]:
+        return self.voice.status()
+
+    def analyze_voice(self, content: bytes, filename: str, lang: str = "en", role: str = "non_doctor") -> Dict[str, Any]:
+        return self.voice.analyze_bytes(content, filename, lang=lang, role=role)
+
+    def voice_sample(self, state_name: str = "calm_regulated", sex: str = "female",
+                     lang: str = "en", role: str = "non_doctor") -> Dict[str, Any]:
+        return self.voice.sample(state_name=state_name, sex=sex, lang=lang, role=role)
 
 
 # ------------------------------------------------------------------ module helpers
@@ -372,6 +480,13 @@ def _ecg_brief(ecg: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return None
     keys = ("class_code", "class_name", "confidence_pct", "heart_rate", "qtc_ms", "rr_regularity", "stemi_suspected", "source")
     return {k: ecg.get(k) for k in keys if k in ecg}
+
+
+def _voice_brief(voice: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not voice:
+        return None
+    keys = ("state_key", "state_en", "state_tr", "voice_risk_pct", "ci_low", "ci_high", "level", "mood", "biomarkers", "source")
+    return {k: voice.get(k) for k in keys if k in voice}
 
 
 def _env_brief(environment: Dict[str, Any], known: Dict[str, float]) -> Optional[Dict[str, Any]]:

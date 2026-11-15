@@ -1,5 +1,5 @@
 """
-Held-out evaluation of AstroGuard-X (v2) - "how good is it, really?"
+Held-out evaluation of AstrocyteX-Net (v3.0) - rigorous out-of-sample benchmarking.
 
     python -m models.evaluate                         # default: 6000 unseen crew-days, 1000 bootstrap resamples
     python -m models.evaluate --test-samples 2000 --boot 300
@@ -21,16 +21,13 @@ worse than a false yellow).  Therefore (see ``models/metrics.py``):
 Compared systems (identical, seed-disjoint test crews - never seen during training):
 
 1. ``rule``      transparent reference-range score only (what a classic monitor shows)
-2. ``ridge``     simple ML baseline: linear (ridge) residual on top of the rule score, fitted
-                 with scikit-learn on a separate simulated training set
-3. ``model``     AstroGuardNet v2 (Monte-Carlo mean)
-4. ``deployed``  what the dashboard shows: 0.20 * rule + 0.80 * model with the red/black
+2. ``ridge``     linear ML baseline: Ridge residual on top of the rule score (scikit-learn)
+3. ``mlp``       non-linear ML baseline: 2-hidden-layer MLP residual on top of rule (scikit-learn)
+4. ``model``     AstrocyteX-Net v3.0 (Monte-Carlo mean)
+5. ``deployed``  what the dashboard shows: 0.20 * rule + 0.80 * model with the red/black
                  safety floor
-5. ``model_no_env``  ablation - the same network with all 12 environment inputs set to
+6. ``model_no_env``  ablation - the same network with all 12 environment inputs set to
                  neutral, to measure how much the environment data contribute
-
-Bootstrap resamples whole crew-days (not single cells) to respect within-day correlation;
-paired bootstrap differences (model - baseline) give the significance of the improvement.
 """
 from __future__ import annotations
 
@@ -128,16 +125,21 @@ def evaluate_checkpoint(checkpoint: Path, test_samples: int = 6000, seed: int = 
 
     # ---- 1. rule baseline ------------------------------------------------------------------
     rule = _rule_risk(test)
-    # ---- 2. ridge residual baseline (scikit-learn) ------------------------------------------
+    # ---- 2. ridge + mlp residual baselines (scikit-learn) ----------------------------------
     from sklearn.linear_model import Ridge
+    from sklearn.neural_network import MLPRegressor
     from sklearn.preprocessing import StandardScaler
 
     rule_b = _rule_risk(base)
     xb, xt = _ridge_features(base, rule_b), _ridge_features(test, rule)
     yb = _logit(base["risk"].cpu().numpy()[:, :-1]) - _logit(rule_b / 100.0)
     scaler = StandardScaler().fit(xb)  # fitted on the baseline-training data only
-    ridge = Ridge(alpha=3.0).fit(scaler.transform(xb), yb)
-    ridge_pred = 100.0 / (1.0 + np.exp(-(_logit(rule / 100.0) + ridge.predict(scaler.transform(xt)))))
+    xb_s, xt_s = scaler.transform(xb), scaler.transform(xt)
+    ridge = Ridge(alpha=3.0).fit(xb_s, yb)
+    ridge_pred = 100.0 / (1.0 + np.exp(-(_logit(rule / 100.0) + ridge.predict(xt_s))))
+    mlp = MLPRegressor(hidden_layer_sizes=(192, 96), activation="relu", alpha=1e-3, max_iter=70,
+                       early_stopping=True, random_state=0).fit(xb_s, yb)
+    mlp_pred = 100.0 / (1.0 + np.exp(-(_logit(rule / 100.0) + mlp.predict(xt_s))))
     # ---- 3. the network ---------------------------------------------------------------------
     tm = time.time()
     p = predict_dataset(model, test, n_mc=n_mc)
@@ -151,6 +153,7 @@ def evaluate_checkpoint(checkpoint: Path, test_samples: int = 6000, seed: int = 
     systems = {
         "rule": (rule, _health_overall(rule)),
         "ridge": (ridge_pred, _health_overall(ridge_pred)),
+        "mlp": (mlp_pred, _health_overall(mlp_pred)),
         "model": (model_param, model_overall),
         "deployed": (dep, _health_overall(dep)),
         "model_no_env": (p_noenv["risk"][:, :-1], p_noenv["risk"][:, -1]),
@@ -172,6 +175,7 @@ def evaluate_checkpoint(checkpoint: Path, test_samples: int = 6000, seed: int = 
     boot["health"] = {name: bootstrap_ci(psc_h[name], boot_metrics, n_boot, seed=1) for name in systems}
     boot["model_vs_rule"] = bootstrap_ci(psc["model"], boot_metrics, n_boot, seed=1, paired_with=psc["rule"])
     boot["model_vs_ridge"] = bootstrap_ci(psc["model"], boot_metrics, n_boot, seed=1, paired_with=psc["ridge"])
+    boot["model_vs_mlp"] = bootstrap_ci(psc["model"], boot_metrics, n_boot, seed=1, paired_with=psc["mlp"])
     boot["model_vs_no_env"] = bootstrap_ci(psc["model"], boot_metrics, n_boot, seed=1, paired_with=psc["model_no_env"])
     boot["model_vs_no_env_health"] = bootstrap_ci(psc_h["model"], boot_metrics, n_boot, seed=1, paired_with=psc_h["model_no_env"])
     boot["deployed_vs_rule"] = bootstrap_ci(psc["deployed"], boot_metrics, n_boot, seed=1, paired_with=psc["rule"])
@@ -202,7 +206,7 @@ def evaluate_checkpoint(checkpoint: Path, test_samples: int = 6000, seed: int = 
             if m.sum() < 20:
                 continue
             row = {"n": int(m.sum())}
-            for sysname in ("rule", "ridge", "model", "deployed", "model_no_env"):
+            for sysname in ("rule", "ridge", "mlp", "model", "deployed", "model_no_env"):
                 sp = systems[sysname][0]
                 bm = band_metrics(tb[m][:, HEALTH_IDX], bands(sp[m][:, HEALTH_IDX]))
                 row[f"{sysname}_mcc"] = bm["mcc"]
@@ -246,54 +250,65 @@ def _plots(report: Dict, img_dir: Path) -> None:
     except Exception:  # matplotlib is optional
         return
     img_dir.mkdir(parents=True, exist_ok=True)
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
-    for ax, name, title in ((axes[0], "rule", "Rule-only baseline"), (axes[1], "model", "AstroGuardNet v2")):
+    plt.rcParams.update({"font.sans-serif": ["Segoe UI", "Arial", "DejaVu Sans"]})
+    fig, axes = plt.subplots(1, 2, figsize=(11.4, 4.8), facecolor="#120922")
+    for ax, name, title in ((axes[0], "rule", "Rule-Only Baseline"), (axes[1], "model", "AstrocyteX-Net v3.0")):
+        ax.set_facecolor("#1a0e30")
         cm = np.array(report["confusion_matrices"][name], dtype=float)
         norm = cm / np.maximum(cm.sum(axis=1, keepdims=True), 1)
-        ax.imshow(norm, cmap="Blues", vmin=0, vmax=1)
+        ax.imshow(norm, cmap="Purples", vmin=0, vmax=1)
         for i in range(5):
             for j in range(5):
-                ax.text(j, i, f"{norm[i, j]:.2f}\n({int(cm[i, j])})", ha="center", va="center", fontsize=7,
-                        color="white" if norm[i, j] > 0.6 else "black")
-        ax.set_xticks(range(5), BAND_NAMES)
-        ax.set_yticks(range(5), BAND_NAMES)
-        ax.set_xlabel("predicted band")
-        ax.set_ylabel("true band")
+                ax.text(j, i, f"{norm[i, j]:.2f}\n({int(cm[i, j])})", ha="center", va="center", fontsize=7.5,
+                        color="white" if norm[i, j] > 0.52 else "#1d1033")
+        ax.set_xticks(range(5), BAND_NAMES, color="#e8dff7")
+        ax.set_yticks(range(5), BAND_NAMES, color="#e8dff7")
+        ax.set_xlabel("Predicted Band", color="#cbbce6")
+        ax.set_ylabel("True Band", color="#cbbce6")
         mcc = report["results"][name]["all_params"]["mcc"]
-        ax.set_title(f"{title}  (MCC {mcc:.3f})")
+        ax.set_title(f"{title}  (MCC {mcc:.3f})", color="#f3edfc", fontweight="bold")
     fig.tight_layout()
-    fig.savefig(img_dir / "confusion_matrix.png", dpi=130)
+    fig.savefig(img_dir / "confusion_matrix.png", dpi=150, facecolor=fig.get_facecolor())
     plt.close(fig)
 
     ev = report["slices"]["event"]
     names = list(ev)
     x = np.arange(len(names))
-    fig, ax = plt.subplots(figsize=(11, 4))
-    for k, (sysname, color) in enumerate((("rule", "#9aa0a6"), ("model_no_env", "#f1c40f"), ("model", "#1a73e8"))):
-        ax.bar(x + (k - 1) * 0.27, [ev[n][f"{sysname}_mcc"] for n in names], 0.27, label=sysname, color=color)
-    ax.set_xticks(x, [n.replace("_", "\n") for n in names], fontsize=8)
-    ax.set_ylabel("MCC (health parameters)")
+    fig, ax = plt.subplots(figsize=(11.4, 4.2), facecolor="#120922")
+    ax.set_facecolor("#1a0e30")
+    palette = (("rule", "#6c6184", "Rule-Only"), ("model_no_env", "#b985d6", "v3.0 No-Env"), ("model", "#8b5cf6", "AstrocyteX-Net v3.0"))
+    for k, (sysname, color, lbl) in enumerate(palette):
+        ax.bar(x + (k - 1) * 0.27, [ev[n][f"{sysname}_mcc"] for n in names], 0.27, label=lbl, color=color, edgecolor="#2c1a4d")
+    ax.set_xticks(x, [n.replace("_", "\n") for n in names], fontsize=8, color="#e8dff7")
+    ax.tick_params(axis="y", colors="#cbbce6")
+    ax.set_ylabel("MCC (Health Parameters)", color="#cbbce6")
     ax.set_ylim(0, 1)
-    ax.legend()
-    ax.set_title("Per environment event: rule baseline vs. network without / with environment inputs")
+    ax.grid(axis="y", color="#311d54", linestyle="--", alpha=0.6)
+    leg = ax.legend(facecolor="#1a0e30", edgecolor="#4a2e7a", labelcolor="#f3edfc")
+    for text in leg.get_texts():
+        text.set_color("#f3edfc")
+    ax.set_title("Per Environment Event: Rule Baseline vs. Network Without / With Environment Inputs",
+                 color="#f3edfc", fontweight="bold")
+    for spine in ax.spines.values():
+        spine.set_color("#3d2569")
     fig.tight_layout()
-    fig.savefig(img_dir / "mcc_by_event.png", dpi=130)
+    fig.savefig(img_dir / "mcc_by_event.png", dpi=150, facecolor=fig.get_facecolor())
     plt.close(fig)
 
 
 # ----------------------------------------------------------------------------- markdown
 def _f(v, d=4):
-    return "–" if v is None or (isinstance(v, float) and np.isnan(v)) else f"{v:.{d}f}"
+    return "-" if v is None or (isinstance(v, float) and np.isnan(v)) else f"{v:.{d}f}"
 
 
 def render_markdown(r: Dict) -> str:
     res, boot, t = r["results"], r["bootstrap_95ci"], r["test"]
     meta = r.get("model_meta", {}).get("metrics", {})
-    L = ["# AstroGuard-X v2 - held-out model evaluation", "",
+    L = ["# AstrocyteX v3.0 - Held-Out Model Evaluation", "",
          "> Generated by `python -m models.evaluate`. All data are **simulated** crews (see `utils/synthetic_data.py`); "
          "the numbers measure agreement with the simulator's targets (reference ranges + physiological, symptom and "
          "environment interaction priors), **not clinical accuracy**.", "",
-         "## Test protocol", "",
+         "## Test Protocol", "",
          f"* **{t['crew_days']:,} unseen crew-days** (seed `{t['seed']}`, disjoint from training and validation seeds), "
          f"{t['cells']:,} parameter-level predictions (43 parameters each).",
          f"* Band distribution of the test cells: " + ", ".join(f"{k} {v:,}" for k, v in t["band_distribution"].items())
@@ -302,7 +317,7 @@ def render_markdown(r: Dict) -> str:
          f"{t['mc_samples']} Monte-Carlo samples per prediction.",
          f"* Model: `{r['checkpoint']}` - {meta.get('params', '?'):,} parameters, trained on {meta.get('samples', '?'):,} "
          f"simulated crew-days, best epoch {meta.get('best_epoch', '?')} ({meta.get('device', '?')}).", "",
-         "## Which metric and why", "",
+         "## Which Metric and Why", "",
          "The dashboard assigns every parameter to one of five **ordered, imbalanced** colour bands. "
          "Accuracy alone would reward a model that never raises a black alarm, so:", "",
          "| Metric | Role | Why it fits |", "|---|---|---|",
@@ -311,72 +326,80 @@ def render_markdown(r: Dict) -> str:
          "| Quadratic weighted kappa | complementary | the bands are ordinal; confusing gray with black is penalised far more than gray with green |",
          "| Critical recall / under-triage | safety | share of true red/black cases flagged red/black, and share shown as gray/green/yellow (missed alarms) |",
          "| Actionable F1 | operational | does the value correctly trigger AI mitigation tasks (yellow or worse)? |", "",
-         "## Headline results (all 43 parameters, test set)", "",
+         "## Headline Results (All 43 Parameters, Test Set)", "",
          "| System | MCC [95 % CI] | Macro-F1 [95 % CI] | QWK | Critical recall | Under-triage | Actionable F1 | MAE (pp) |",
          "|---|---|---|---|---|---|---|---|"]
-    labels = {"rule": "Rule-only (reference ranges)", "ridge": "Ridge residual (scikit-learn)", "model": "**AstroGuardNet v2**",
-              "deployed": "Deployed blend (0.20 rule + 0.80 model, safety floor)", "model_no_env": "Ablation: v2 without environment inputs"}
-    for name in ("rule", "ridge", "model_no_env", "model", "deployed"):
+    labels = {
+        "rule": "Rule-only (reference ranges)",
+        "ridge": "Ridge residual (scikit-learn)",
+        "mlp": "MLP non-linear residual (scikit-learn)",
+        "model": "**AstrocyteX-Net v3.0**",
+        "deployed": "Deployed blend (0.20 rule + 0.80 model, safety floor)",
+        "model_no_env": "Ablation: v3.0 without environment inputs",
+    }
+    for name in ("rule", "ridge", "mlp", "model_no_env", "model", "deployed"):
         a, b = res[name]["all_params"], boot[name]
-        L.append(f"| {labels[name]} | {_f(a['mcc'])} [{_f(b['mcc']['lo'])}–{_f(b['mcc']['hi'])}] | "
-                 f"{_f(a['macro_f1'])} [{_f(b['macro_f1']['lo'])}–{_f(b['macro_f1']['hi'])}] | {_f(a['qwk'])} | "
+        L.append(f"| {labels[name]} | {_f(a['mcc'])} [{_f(b['mcc']['lo'])}-{_f(b['mcc']['hi'])}] | "
+                 f"{_f(a['macro_f1'])} [{_f(b['macro_f1']['lo'])}-{_f(b['macro_f1']['hi'])}] | {_f(a['qwk'])} | "
                  f"{_f(a['critical_recall'])} | {_f(a['under_triage_rate'])} | {_f(a['actionable_f1'])} | {_f(res[name]['mae_pct'], 3)} |")
-    L += ["", "### Physiological health parameters only (31 biomarkers - fair environment ablation)", "",
+    L += ["", "### Physiological Health Parameters Only (31 Biomarkers - Fair Environment Ablation)", "",
           "| System | MCC [95 % CI] | Macro-F1 [95 % CI] | QWK | Critical recall | Under-triage | Actionable F1 | MAE (pp) |",
           "|---|---|---|---|---|---|---|---|"]
-    for name in ("rule", "model_no_env", "ridge", "model", "deployed"):
+    for name in ("rule", "model_no_env", "ridge", "mlp", "model", "deployed"):
         a, b = res[name]["health_params"], boot["health"][name]
-        L.append(f"| {labels[name]} | {_f(a['mcc'])} [{_f(b['mcc']['lo'])}–{_f(b['mcc']['hi'])}] | "
-                 f"{_f(a['macro_f1'])} [{_f(b['macro_f1']['lo'])}–{_f(b['macro_f1']['hi'])}] | {_f(a['qwk'])} | "
+        L.append(f"| {labels[name]} | {_f(a['mcc'])} [{_f(b['mcc']['lo'])}-{_f(b['mcc']['hi'])}] | "
+                 f"{_f(a['macro_f1'])} [{_f(b['macro_f1']['lo'])}-{_f(b['macro_f1']['hi'])}] | {_f(a['qwk'])} | "
                  f"{_f(a['critical_recall'])} | {_f(a['under_triage_rate'])} | {_f(a['actionable_f1'])} | {_f(res[name]['mae_health_pct'], 3)} |")
-    L += ["", "### Is the improvement significant? (paired bootstrap of the difference)", "",
-          "| Comparison | Δ MCC 95 % CI | Δ Macro-F1 95 % CI | Δ critical recall 95 % CI | P(Δ MCC ≤ 0) |", "|---|---|---|---|---|"]
-    for key, label in (("model_vs_rule", "v2 − rule (all 43)"), ("model_vs_ridge", "v2 − ridge (all 43)"),
-                       ("model_vs_no_env_health", "v2 − v2 without environment (31 health params)"),
-                       ("model_vs_no_env", "v2 − v2 without environment (all 43)"),
-                       ("deployed_vs_rule", "deployed − rule (all 43)")):
+    L += ["", "### Statistical Significance (Paired Bootstrap of Differences)", "",
+          "| Comparison | Delta MCC 95 % CI | Delta Macro-F1 95 % CI | Delta critical recall 95 % CI | P(Delta MCC <= 0) |", "|---|---|---|---|---|"]
+    for key, label in (("model_vs_rule", "v3.0 - rule (all 43)"),
+                       ("model_vs_ridge", "v3.0 - ridge (all 43)"),
+                       ("model_vs_mlp", "v3.0 - mlp (all 43)"),
+                       ("model_vs_no_env_health", "v3.0 - v3.0 without environment (31 health params)"),
+                       ("model_vs_no_env", "v3.0 - v3.0 without environment (all 43)"),
+                       ("deployed_vs_rule", "deployed - rule (all 43)")):
         b = boot[key]
-        L.append(f"| {label} | {_f(b['mcc']['diff_lo'])} … {_f(b['mcc']['diff_hi'])} | {_f(b['macro_f1']['diff_lo'])} … "
-                 f"{_f(b['macro_f1']['diff_hi'])} | {_f(b['critical_recall']['diff_lo'])} … {_f(b['critical_recall']['diff_hi'])} | "
+        L.append(f"| {label} | {_f(b['mcc']['diff_lo'])} .. {_f(b['mcc']['diff_hi'])} | {_f(b['macro_f1']['diff_lo'])} .. "
+                 f"{_f(b['macro_f1']['diff_hi'])} | {_f(b['critical_recall']['diff_lo'])} .. {_f(b['critical_recall']['diff_hi'])} | "
                  f"{_f(b['mcc']['p_diff_le_0'], 3)} |")
     m = res["model"]
-    L += ["", "## Network details", "",
+    L += ["", "## Network Details", "",
           "| Metric | Value |", "|---|---|",
           f"| Health parameters: MCC / macro-F1 / QWK | {_f(m['health_params']['mcc'])} / {_f(m['health_params']['macro_f1'])} / {_f(m['health_params']['qwk'])} |",
           f"| Environment parameters: MCC / macro-F1 | {_f(m['environment_params']['mcc'])} / {_f(m['environment_params']['macro_f1'])} |",
           f"| Overall health-risk band: MCC / macro-F1 / QWK | {_f(m['health_params_overall_band']['mcc'])} / {_f(m['health_params_overall_band']['macro_f1'])} / {_f(m['health_params_overall_band']['qwk'])} |",
           f"| Black-band recall | {_f(m['all_params']['black_recall'])} |",
           f"| Risk MAE / RMSE (percentage points) | {_f(m['mae_pct'], 3)} / {_f(m['rmse_pct'], 3)} |",
-          f"| Predictions within ±10 points | {_f(m['within_10pct'])} |",
+          f"| Predictions within +/-10 points | {_f(m['within_10pct'])} |",
           f"| 90 % credible-interval coverage | {_f(m['ci90_coverage'])} |",
           f"| 7-day forecast MAE (points) | {_f(m['forecast_mae_pct'], 3)} |",
           f"| Inference time per crew-day ({'GPU' if 'cuda' in str(meta.get('device', '')) else 'CPU'}, batched) | {m['inference_ms_per_crew_day']} ms |", "",
-          "### Per-band precision / recall (all parameters)", "",
-          "| Band | Support | Rule recall | **v2 precision** | **v2 recall** | **v2 F1** |", "|---|---|---|---|---|---|"]
+          "### Per-Band Precision / Recall (All Parameters)", "",
+          "| Band | Support | Rule recall | **v3.0 precision** | **v3.0 recall** | **v3.0 F1** |", "|---|---|---|---|---|---|"]
     for b in BAND_NAMES:
         pm, pr = r["per_class"]["model"][b], r["per_class"]["rule"][b]
         L.append(f"| {b} | {pm['support']:,} | {_f(pr['recall'])} | {_f(pm['precision'])} | {_f(pm['recall'])} | {_f(pm['f1'])} |")
     L += ["", "![Confusion matrices](img/confusion_matrix.png)", "",
-          "## Slice analysis - does the network use the environment?", "",
+          "## Slice Analysis - Does the Network Use the Environment?", "",
           "MCC on the 31 health parameters per off-nominal environment event and per mission profile. "
           "`no-env` is the same network with all environment inputs neutralised.", "",
-          "| Event | n | Rule MCC | v2 no-env MCC | **v2 MCC** | Rule crit. recall | **v2 crit. recall** |", "|---|---|---|---|---|---|---|"]
+          "| Event | n | Rule MCC | v3.0 no-env MCC | **v3.0 MCC** | Rule crit. recall | **v3.0 crit. recall** |", "|---|---|---|---|---|---|---|"]
     for nm, s in r["slices"]["event"].items():
         L.append(f"| {nm} | {s['n']} | {_f(s['rule_mcc'])} | {_f(s['model_no_env_mcc'])} | **{_f(s['model_mcc'])}** | "
                  f"{_f(s['rule_crit_recall'])} | **{_f(s['model_crit_recall'])}** |")
-    L += ["", "| Mission profile | n | Rule MCC | v2 no-env MCC | **v2 MCC** | v2 MAE |", "|---|---|---|---|---|---|"]
+    L += ["", "| Mission profile | n | Rule MCC | v3.0 no-env MCC | **v3.0 MCC** | v3.0 MAE |", "|---|---|---|---|---|---|"]
     for nm, s in r["slices"]["profile"].items():
         L.append(f"| {MISSION_PROFILES[nm]['en']} | {s['n']} | {_f(s['rule_mcc'])} | {_f(s['model_no_env_mcc'])} | "
                  f"**{_f(s['model_mcc'])}** | {_f(s['model_mae'], 3)} |")
     L += ["", "![MCC by event](img/mcc_by_event.png)", "",
-          f"*scikit-learn cross-check (v2, all parameters):* MCC {_f(r['sklearn_crosscheck_model_all_params']['mcc'], 6)}, "
+          f"*scikit-learn cross-check (v3.0, all parameters):* MCC {_f(r['sklearn_crosscheck_model_all_params']['mcc'], 6)}, "
           f"macro-F1 {_f(r['sklearn_crosscheck_model_all_params']['macro_f1'], 6)}, "
           f"QWK {_f(r['sklearn_crosscheck_model_all_params']['qwk'], 6)} - identical to the NumPy implementation.", ""]
     return "\n".join(L)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Held-out evaluation of AstroGuard-X")
+    ap = argparse.ArgumentParser(description="Held-out evaluation of AstrocyteX-Net v3.0")
     ap.add_argument("--checkpoint", type=Path, default=None)
     ap.add_argument("--test-samples", type=int, default=6000)
     ap.add_argument("--seed", type=int, default=424242)

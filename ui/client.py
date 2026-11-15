@@ -1,5 +1,5 @@
 """
-Backend access for the UI: the same interface in-process (``LocalClient``) or over HTTP
+Backend access for the AstrocyteX Streamlit UI: in-process (``LocalClient``) or over HTTP
 (``RemoteClient``, used when ``ASTROGUARD_API_URL`` is set, e.g. with docker-compose).
 
 Open-source attribution: *requests* (Apache-2.0) for the REST client.
@@ -25,7 +25,12 @@ class LocalClient:
 
     def health(self) -> Dict[str, Any]:
         s = self.svc
-        return {"model": s.model_info(), "gemini": s.advisor.status(), "ecg": s.ecg_status()}
+        return {
+            "model": s.model_info(),
+            "gemini": s.advisor.status(),
+            "ecg": s.ecg_status(),
+            "voice": s.voice_status(),
+        }
 
     def assess(self, aid: str, payload: Dict[str, Any], lang: str) -> Dict[str, Any]:
         from backend.schemas import ReadingIn
@@ -47,8 +52,8 @@ class LocalClient:
     def gamification(self, aid: str) -> Dict[str, Any]:
         return self.svc.gamification_state(aid).model_dump(mode="json")
 
-    def chat(self, aid: str, question: str, lang: str) -> Dict[str, str]:
-        return self.svc.chat(aid, question, lang)
+    def chat(self, aid: str, question: str, lang: str, role: str = "non_doctor") -> Dict[str, str]:
+        return self.svc.chat(aid, question, lang, role=role)
 
     def ecg_status(self) -> Dict[str, Any]:
         return self.svc.ecg_status()
@@ -58,6 +63,15 @@ class LocalClient:
 
     def ecg_sample(self, code: str) -> Dict[str, Any]:
         return self.svc.ecg_sample(code)
+
+    def voice_status(self) -> Dict[str, Any]:
+        return self.svc.voice_status()
+
+    def voice_analyze(self, content: bytes, filename: str, lang: str = "en") -> Dict[str, Any]:
+        return self.svc.analyze_voice(content, filename, lang=lang)
+
+    def voice_sample(self, state_name: str, lang: str = "en") -> Dict[str, Any]:
+        return self.svc.voice_sample(state_name, lang=lang)
 
 
 class RemoteClient:
@@ -94,8 +108,8 @@ class RemoteClient:
     def gamification(self, aid):
         return self._req("GET", f"/astronauts/{aid}/gamification")
 
-    def chat(self, aid, question, lang):
-        return self._req("POST", f"/astronauts/{aid}/chat", params={"lang": lang}, json={"question": question})
+    def chat(self, aid, question, lang, role="non_doctor"):
+        return self._req("POST", f"/astronauts/{aid}/chat", params={"lang": lang}, json={"question": question, "role": role})
 
     def ecg_status(self):
         return self._req("GET", "/ecg/status")
@@ -105,6 +119,15 @@ class RemoteClient:
 
     def ecg_sample(self, code):
         return self._req("GET", f"/ecg/sample/{code}", timeout=300)
+
+    def voice_status(self):
+        return self._req("GET", "/voice/status")
+
+    def voice_analyze(self, content, filename, lang="en"):
+        return self._req("POST", "/voice/analyze", params={"lang": lang}, files={"file": (filename, content)}, timeout=180)
+
+    def voice_sample(self, state_name, lang="en"):
+        return self._req("GET", f"/voice/sample/{state_name}", params={"lang": lang}, timeout=180)
 
 
 def make_client():

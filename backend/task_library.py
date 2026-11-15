@@ -37,7 +37,7 @@ _NAP: Template = ("Take a 20-minute power nap",
 _VITD: Template = ("Take the scheduled vitamin D supplement and log it",
                    "Take the supplement exactly as prescribed in the crew protocol - no extra doses.", 2, "nutrition")
 _ECG_REPEAT: Template = ("Record a repeat 12-lead ECG",
-                         "Sit still for 10 s, attach all leads, record and upload the ECG to AstroGuard-X for analysis.", 10, "ecg")
+                         "Sit still for 10 s, attach all leads, record and upload the ECG to AstrocyteX for analysis.", 10, "ecg")
 _COOL: Template = ("Cool down: lower the module temperature and drink cool water",
                    "Reduce layers, increase ventilation, drink 500 ml cool water and re-check the temperature in 30 minutes.", 20, "cooling")
 _MIND: Template = ("Take a 15-minute wellbeing break",

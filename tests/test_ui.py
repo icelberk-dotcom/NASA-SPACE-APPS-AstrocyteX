@@ -51,3 +51,20 @@ def test_turkish_language_switch(app):
     at.selectbox(key="lang").select("tr").run()
     assert not at.exception
     assert any("Panel" in t.label for t in at.tabs)
+
+
+def test_voice_preset_and_doctor_role_in_streamlit(app):
+    at = app.run()
+    at.selectbox(key="user_role").select("doctor").run()
+    at.selectbox(key="voice_sample_sel").select("acute_stress")
+    at.button(key="voice_sample_btn").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["voice_result"] is not None
+    assert at.session_state["voice_result"]["voice_risk_pct"] > 40.0
+
+    at.button(key="run_top").click().run()
+    assert not at.exception, at.exception
+    A = at.session_state["assessment"]
+    assert A["advisor"]["user_role"] == "doctor"
+    assert A["overall"].get("voice_risk_pct") is not None
+

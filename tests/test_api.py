@@ -77,10 +77,16 @@ def test_ecg_endpoints_use_builtin_fallback(client):
 
 def test_web_ui_and_preset_endpoints(client):
     home = client.get("/")
-    assert home.status_code == 200 and "Astrocyte X" in home.text and "overall-health" in home.text
+    assert home.status_code == 200
+    assert "AstrocyteX" in home.text and "astrocyteX" not in home.text
+    assert "overall-health" in home.text and "Quick Guide" in home.text
+    assert "Slot 01" in home.text and "Cmdr." not in home.text and "Dr. Kaya" not in home.text
     assert client.get("/static/styles.css").status_code == 200
-    assert client.get("/static/app.js").status_code == 200
+    js = client.get("/static/app.js")
+    assert js.status_code == 200 and "AstrocyteX" in js.text and "astrocyteX" not in js.text
+    assert "Cmdr." not in js.text and "Dr. Kaya" not in js.text
     assert client.get("/static/diet_experiments.js").status_code == 200
+    assert client.get("/static/milky_way_earth.jpg").status_code == 200
 
     p = client.get("/presets").json()
     assert "dehydration" in p["scenarios"] and "iss_leo" in p["profiles"] and len(p["initial_sensor_series"]["heart_rate"]) == 96
@@ -93,3 +99,69 @@ def test_web_ui_and_preset_endpoints(client):
 
     ts = client.post("/telemetry/simulate", json={"values": {"heart_rate": 85.0}}).json()
     assert len(ts["sensor_series"]["heart_rate"]) == 96 and "heart_rate" in ts["latest"]
+
+
+def test_voice_and_role_endpoints_over_http(client):
+    from utils.voice_synth import encode_wav_bytes, synthesize_astronaut_voice
+
+    st = client.get("/voice/status").json()
+    assert "version" in st and len(st["states"]) == 5
+
+    smp = client.get("/voice/sample/acute_stress?sex=female&lang=tr&role=doctor").json()
+    assert smp["state_key"] in {s["key"] for s in st["states"]}
+    assert "mood" in smp and "biomarkers" in smp and smp.get("audio_wav_base64")
+
+    wav, _ = synthesize_astronaut_voice("cognitive_fatigue", seed=21, duration_s=3.0)
+    wav_bytes = encode_wav_bytes(wav, 16000)
+    up = client.post("/voice/analyze?lang=tr&role=non_doctor", files={"file": ("crew_voice.wav", wav_bytes, "audio/wav")})
+    assert up.status_code == 200
+    up_json = up.json()
+    assert 0.0 <= up_json["voice_risk_pct"] <= 100.0 and len(up_json["probabilities"]) == 5
+
+    body_doc = {
+        "values": {**DEFAULT_VALUES, **scenario_preset("cardiac_stress")},
+        "voice": {k: v for k, v in smp.items() if not k.startswith("audio_")},
+        "user_role": "doctor",
+    }
+    body_simple = {**body_doc, "user_role": "non_doctor"}
+    r_doc = client.post("/astronauts/vcrew/assess?lang=tr", json=body_doc).json()
+    r_simple = client.post("/astronauts/vcrew2/assess?lang=tr", json=body_simple).json()
+    assert r_doc["overall"]["voice_risk_pct"] == pytest.approx(smp["voice_risk_pct"], abs=0.2)
+    assert r_doc["advisor"]["user_role"] == "doctor" and r_simple["advisor"]["user_role"] == "non_doctor"
+    assert r_doc["advisor"]["summary"] != r_simple["advisor"]["summary"]
+
+    chat_doc = client.post("/astronauts/vcrew/chat?lang=tr", json={"question": "Ses ve kalp bulgularım ne gösteriyor?", "role": "doctor"}).json()
+    chat_simple = client.post("/astronauts/vcrew/chat?lang=tr", json={"question": "Ses ve kalp bulgularım ne gösteriyor?", "role": "non_doctor"}).json()
+    assert chat_doc["role"] == "doctor" and chat_simple["role"] == "non_doctor"
+    assert chat_doc["answer"] != chat_simple["answer"]
+
+    en_tasks = client.get("/astronauts/vcrew/tasks?lang=en").json()
+    assert len(en_tasks) >= 1
+    from backend.gemini_agent import is_turkish_text
+    assert all(not is_turkish_text(t["title"]) and not is_turkish_text(t["description"]) for t in en_tasks)
+
+
+def test_zero_emojis_across_application_codebase():
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    emoji_re = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B50\u23F0-\u23FA]")
+    checked = 0
+    offenders = []
+    targets = [
+        *(root / folder for folder in ("web", "ui", "backend", "models", "utils", "docs", "scripts")),
+        root / "README.md",
+        root / "THIRD_PARTY_NOTICES.md",
+        root / "run.py",
+    ]
+    for item in targets:
+        files = item.rglob("*") if item.is_dir() else [item]
+        for p in files:
+            if p.is_file() and p.suffix in (".py", ".html", ".css", ".js", ".md"):
+                checked += 1
+                hits = emoji_re.findall(p.read_text(encoding="utf-8", errors="ignore"))
+                if hits:
+                    offenders.append((str(p.relative_to(root)), hits[:5]))
+    assert checked >= 30 and offenders == [], f"Found forbidden emojis: {offenders}"
+

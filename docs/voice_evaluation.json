@@ -1,0 +1,289 @@
+{
+  "model_version": "AstrocyteX-Voice-1.0",
+  "checkpoint": "C:\\Users\\VICTUS\\.gemini\\antigravity\\scratch\\AstroGuard-X\\checkpoints\\astrovoice_v1.pt",
+  "meta": {
+    "version": "AstrocyteX-Voice-1.0",
+    "params": 259645,
+    "train_samples": 4000,
+    "val_samples": 700,
+    "test_samples": 1200,
+    "best_epoch": 26,
+    "epochs_run": 45,
+    "device": "cuda",
+    "train_seconds": 508.9,
+    "test_mcc": 0.9957,
+    "test_macro_f1": 0.9963,
+    "test_risk_mae": 3.168
+  },
+  "states": [
+    "calm_regulated",
+    "cognitive_fatigue",
+    "acute_stress",
+    "low_mood_isolation",
+    "dyspnea_hypoxic"
+  ],
+  "systems": {
+    "naive_baseline": {
+      "state_mcc": 0.0,
+      "state_mcc_ci": [
+        0.0,
+        0.0
+      ],
+      "state_macro_f1": 0.09735182849936949,
+      "state_macro_f1_ci": [
+        0.09111471880306395,
+        0.10352526708301876
+      ],
+      "state_accuracy": 0.32166666666666666,
+      "risk_mae_pct": 26.185447692871094,
+      "risk_mae_ci": [
+        25.436416578292846,
+        26.972645235061645
+      ],
+      "risk_rmse_pct": 29.53816795349121,
+      "risk_band_mcc": 0.0,
+      "risk_band_qwk": 0.0,
+      "critical_recall": 0.0
+    },
+    "rule_acoustic": {
+      "state_mcc": 0.362337490867837,
+      "state_mcc_ci": [
+        0.3278394685481856,
+        0.39550216547153233
+      ],
+      "state_macro_f1": 0.3864173599606743,
+      "state_macro_f1_ci": [
+        0.3589083384211207,
+        0.4127672646768324
+      ],
+      "state_accuracy": 0.5075,
+      "risk_mae_pct": 25.925636291503906,
+      "risk_mae_ci": [
+        25.02639799118042,
+        26.764604377746583
+      ],
+      "risk_rmse_pct": 30.303035736083984,
+      "risk_band_mcc": 0.2732841504867488,
+      "risk_band_qwk": 0.1288657026019573,
+      "critical_recall": 0.002617801047120419
+    },
+    "logistic_ridge": {
+      "state_mcc": 0.9967746971577083,
+      "state_mcc_ci": [
+        0.9925233364932852,
+        1.0
+      ],
+      "state_macro_f1": 0.9974812446534289,
+      "state_macro_f1_ci": [
+        0.9942911530402193,
+        1.0
+      ],
+      "state_accuracy": 0.9975,
+      "risk_mae_pct": 10.470867156982422,
+      "risk_mae_ci": [
+        9.979981732368469,
+        10.96537721157074
+      ],
+      "risk_rmse_pct": 13.42321491241455,
+      "risk_band_mcc": 0.40258065152271055,
+      "risk_band_qwk": 0.7958133250358201,
+      "critical_recall": 0.5785340314136126
+    },
+    "random_forest": {
+      "state_mcc": 0.970950337980983,
+      "state_mcc_ci": [
+        0.9599149646002613,
+        0.9807874028763649
+      ],
+      "state_macro_f1": 0.9752615142005808,
+      "state_macro_f1_ci": [
+        0.9659256120552732,
+        0.9836559901837719
+      ],
+      "state_accuracy": 0.9775,
+      "risk_mae_pct": 3.276128053665161,
+      "risk_mae_ci": [
+        3.110392063856125,
+        3.4609336733818052
+      ],
+      "risk_rmse_pct": 4.501954078674316,
+      "risk_band_mcc": 0.8583057578634135,
+      "risk_band_qwk": 0.9655698728254122,
+      "critical_recall": 0.9345549738219895
+    },
+    "hist_gradient_boosting": {
+      "state_mcc": 0.9827802184583935,
+      "state_mcc_ci": [
+        0.9749769327327165,
+        0.9903880317845075
+      ],
+      "state_macro_f1": 0.985165251030191,
+      "state_macro_f1_ci": [
+        0.9780926061749687,
+        0.9918504513653794
+      ],
+      "state_accuracy": 0.9866666666666667,
+      "risk_mae_pct": 4.009015242609508,
+      "risk_mae_ci": [
+        3.7568196026823246,
+        4.2624925015401836
+      ],
+      "risk_rmse_pct": 5.983400306052734,
+      "risk_band_mcc": 0.8205805705888283,
+      "risk_band_qwk": 0.9531387449404917,
+      "critical_recall": 0.9057591623036649
+    },
+    "ablation_prosody_only": {
+      "state_mcc": 0.9860542618873015,
+      "state_mcc_ci": [
+        0.9785167722823936,
+        0.9935033545092854
+      ],
+      "state_macro_f1": 0.9854327688016549,
+      "state_macro_f1_ci": [
+        0.9771337893697908,
+        0.9930104881469917
+      ],
+      "state_accuracy": 0.9891666666666666,
+      "risk_mae_pct": 3.3335981369018555,
+      "risk_mae_ci": [
+        3.1565429508686065,
+        3.500551629066467
+      ],
+      "risk_rmse_pct": 4.504302024841309,
+      "risk_band_mcc": 0.85574665352626,
+      "risk_band_qwk": 0.965504066174247,
+      "critical_recall": 0.9267015706806283
+    },
+    "astrovoice_v1": {
+      "state_mcc": 0.9956936537015738,
+      "state_mcc_ci": [
+        0.9913661965584818,
+        0.9989306582891406
+      ],
+      "state_macro_f1": 0.9962861594172386,
+      "state_macro_f1_ci": [
+        0.9923301164820321,
+        0.9990964379727825
+      ],
+      "state_accuracy": 0.9966666666666667,
+      "risk_mae_pct": 3.167607307434082,
+      "risk_mae_ci": [
+        3.0273611426353453,
+        3.29596409201622
+      ],
+      "risk_rmse_pct": 3.9482245445251465,
+      "risk_band_mcc": 0.8570219984208577,
+      "risk_band_qwk": 0.9674280215825548,
+      "critical_recall": 0.9319371727748691,
+      "mood_mae_pct": 3.683,
+      "ci90_coverage": 0.9408,
+      "inference_ms_per_clip": 2.411
+    }
+  },
+  "slices": {
+    "female_speakers": {
+      "n": 580,
+      "mcc": 0.9933,
+      "macro_f1": 0.9935,
+      "risk_mae_pct": 3.283
+    },
+    "male_speakers": {
+      "n": 620,
+      "mcc": 0.9979,
+      "macro_f1": 0.9984,
+      "risk_mae_pct": 3.059
+    },
+    "harsh_cabin_noise_snr_le_22db": {
+      "n": 420,
+      "mcc": 0.9938,
+      "macro_f1": 0.9947,
+      "risk_mae_pct": 3.073
+    },
+    "nominal_cabin_snr_gt_22db": {
+      "n": 780,
+      "mcc": 0.9967,
+      "macro_f1": 0.9971,
+      "risk_mae_pct": 3.219
+    }
+  },
+  "confusion_matrix": [
+    [
+      386,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      252,
+      0,
+      2,
+      0
+    ],
+    [
+      0,
+      0,
+      247,
+      0,
+      0
+    ],
+    [
+      0,
+      2,
+      0,
+      185,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      126
+    ]
+  ],
+  "top_biomarkers": [
+    {
+      "feature": "rms_mean_db",
+      "weight": 0.2107
+    },
+    {
+      "feature": "jitter_local_pct",
+      "weight": 0.1512
+    },
+    {
+      "feature": "alpha_ratio_db",
+      "weight": 0.0715
+    },
+    {
+      "feature": "speech_rate_syl_s",
+      "weight": 0.0555
+    },
+    {
+      "feature": "hammarberg_index_db",
+      "weight": 0.0507
+    },
+    {
+      "feature": "crest_factor",
+      "weight": 0.0391
+    },
+    {
+      "feature": "spectral_flux",
+      "weight": 0.0348
+    },
+    {
+      "feature": "mfcc_2_std",
+      "weight": 0.0317
+    },
+    {
+      "feature": "shimmer_local_pct",
+      "weight": 0.0309
+    },
+    {
+      "feature": "f0_std_hz",
+      "weight": 0.0229
+    }
+  ]
+}

@@ -115,3 +115,29 @@ def test_ecg_values_flow_into_assessment(service):
     assert _p(a, "ecg_qtc_ms").level == "black"
     assert _p(a, "heart_rate").value == 80.0  # wearable value wins over the ECG estimate
     assert a.ecg["class_code"] == "AFIB"
+
+
+def test_voice_analysis_fusion_and_mitigation_tasks(service):
+    v_stress = service.voice_sample("acute_stress", sex="female", lang="tr", role="doctor")
+    assert v_stress["voice_risk_pct"] > 45.0 and "audio_wav_base64" in v_stress
+
+    a_plain = service.assess("v1", _reading())
+    a_voice = service.assess("v1_voice", _reading(voice={k: v for k, v in v_stress.items() if not k.startswith("audio_")}), lang="tr")
+    assert a_voice.overall["voice_risk_pct"] == pytest.approx(v_stress["voice_risk_pct"], abs=0.2)
+    assert a_voice.overall["risk_pct"] > a_plain.overall["risk_pct"]
+    assert any(t.parameter_key == "voice_prosody" for t in a_voice.new_tasks)
+
+
+def test_doctor_vs_non_doctor_role_adapts_briefing_and_chat(service):
+    vals = scenario_preset("cardiac_stress")
+    a_doc = service.assess("role_doc", _reading(vals, user_role="doctor"), lang="tr")
+    a_crew = service.assess("role_crew", _reading(vals, user_role="non_doctor"), lang="tr")
+    assert a_doc.advisor["user_role"] == "doctor" and a_crew.advisor["user_role"] == "non_doctor"
+    assert a_doc.advisor["summary"] != a_crew.advisor["summary"]
+    assert "Genel sağlık riski" in a_doc.advisor["summary"] and "Genel sağlık riski" in a_crew.advisor["summary"]
+
+    c_doc = service.chat("role_doc", "Kalp hızım neden yüksek?", lang="tr", role="doctor")
+    c_crew = service.chat("role_crew", "Kalp hızım neden yüksek?", lang="tr", role="non_doctor")
+    assert c_doc["role"] == "doctor" and c_crew["role"] == "non_doctor"
+    assert c_doc["answer"] != c_crew["answer"]
+

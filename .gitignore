@@ -7,12 +7,14 @@ venv/
 *.egg-info/
 # Secrets & local config
 .env
-# Local data & trained weights (reproducible with `python -m models.train`)
+# Local data & ephemeral logs
 data/*.db
 data/*.db-*
 data/*.log
 data/_*
 checkpoints/*.pt
+!checkpoints/astroguard_v2.pt
+!checkpoints/astrovoice_v1.pt
 checkpoints/*.log
 # Large third-party ECG package / weights are NOT part of this repository
 external/

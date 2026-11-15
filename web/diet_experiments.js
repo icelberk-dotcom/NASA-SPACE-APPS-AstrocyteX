@@ -1,6 +1,6 @@
 /* ==========================================================================
-   Astrocyte X · AstroGuard-X — Diet, Stock, Hydration, History & Experiments
-   Preserves 100% of the prototype's interactive mechanics + live AI sync.
+   AstrocyteX — Diet, Stock, Hydration, History & Experiments
+   Preserves 100% of interactive mechanics + live model sync (zero emojis).
    ========================================================================== */
 
 (() => {
@@ -110,7 +110,7 @@
 
         const name = document.createElement("div");
         name.className = "experiment-name";
-        name.textContent = "🧪 " + exp.name;
+        name.textContent = exp.name;
         info.appendChild(name);
 
         if (exp.variables) {
@@ -444,20 +444,20 @@
           const nut = linked && Number.isFinite(Number(entry.amountValue))
             ? getNutritionForAmount(linked, entry.amountValue)
             : (entry.nutrition || "");
-          const km = nut.match(/(\d+(?:[.,]\d+)?)\s*(?:kcal|cal|kalori|ккал)/i);
+          const km = nut.match(/(\d+(?:[.,]\d+)?)\s*(?:kcal|cal)/i);
           if (km) kcal += parseFloat(km[1].replace(",", "."));
-          const pm = nut.match(/(\d+(?:[.,]\d+)?)\s*g\s*(?:protein|prot|бел)/i) || nut.match(/(?:protein|prot|белки)[:\s]*(\d+(?:[.,]\d+)?)/i);
+          const pm = nut.match(/(\d+(?:[.,]\d+)?)\s*g\s*(?:protein|prot)/i) || nut.match(/(?:protein|prot)[:\s]*(\d+(?:[.,]\d+)?)/i);
           if (pm) protein += parseFloat(pm[1].replace(",", "."));
         }
       }
       let fluidMl = 0;
       for (const h of hydrationItems) {
         const raw = String(h.volume || "").trim();
-        const m = raw.match(/(\d+(?:[.,]\d+)?)\s*(ml|mL|l|L|л|мл)?/);
+        const m = raw.match(/(\d+(?:[.,]\d+)?)\s*(ml|mL|l|L)?/);
         if (m) {
           const v = parseFloat(m[1].replace(",", "."));
           const u = (m[2] || "ml").toLowerCase();
-          fluidMl += (u === "l" || u === "л") ? v * 1000 : v;
+          fluidMl += u === "l" ? v * 1000 : v;
         }
       }
       return {
@@ -476,9 +476,9 @@
       const proUsed = totals.protein_g > 0 ? totals.protein_g : (window.agGetVal ? window.agGetVal("protein_g") : 100);
       const flUsed = totals.fluid_intake_ml > 0 ? totals.fluid_intake_ml : (window.agGetVal ? window.agGetVal("fluid_intake_ml") : 2500);
       summaryEl.innerHTML = `
-        <span class="status-chip">${dotHtml("calories_kcal", calUsed)} 🔥 <b>${calUsed}</b> kcal/d</span>
-        <span class="status-chip">${dotHtml("protein_g", proUsed)} 🥩 <b>${proUsed}</b> g protein</span>
-        <span class="status-chip">${dotHtml("fluid_intake_ml", flUsed)} 💧 <b>${flUsed}</b> mL</span>
+        <span class="status-chip">${dotHtml("calories_kcal", calUsed)} Energy <b>${calUsed}</b> kcal/d</span>
+        <span class="status-chip">${dotHtml("protein_g", proUsed)} Protein <b>${proUsed}</b> g</span>
+        <span class="status-chip">${dotHtml("fluid_intake_ml", flUsed)} Fluid <b>${flUsed}</b> mL</span>
       `;
     }
 
@@ -1001,7 +1001,7 @@
         info.className = "hydration-info";
         const vol = document.createElement("div");
         vol.className = "hydration-volume";
-        vol.textContent = `💧 ${t("volumeOfWater")}: ${item.volume}`;
+        vol.textContent = `${t("volumeOfWater")}: ${item.volume}`;
         info.appendChild(vol);
         if (item.supplements) {
           const sup = document.createElement("div");
@@ -1116,7 +1116,7 @@
           const star = document.createElement("button");
           star.type = "button";
           star.className = "history-star" + (i <= rating ? " filled" : "");
-          star.textContent = "★";
+          star.textContent = String(i);
           star.addEventListener("click", () => {
             const all = loadHistory();
             const found = all.find((h) => h.date === item.date);

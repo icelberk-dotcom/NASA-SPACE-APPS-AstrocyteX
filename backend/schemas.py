@@ -23,6 +23,9 @@ class ReadingIn(BaseModel):
     gravity: float = Field(default=0.0, ge=0, le=1.0,
                            description="0 = microgravity, 1 = Earth (used only if values has no 'gravity_g')")
     ecg: Optional[Dict[str, Any]] = Field(default=None, description="ECGResult dict to merge (optional)")
+    voice: Optional[Dict[str, Any]] = Field(default=None, description="VoiceAnalyzer result dict to merge (optional)")
+    user_role: str = Field(default="non_doctor", pattern="^(doctor|non_doctor)$",
+                           description="Audience role for AI advisor output ('doctor' or 'non_doctor')")
     save: bool = True
 
 
@@ -127,6 +130,7 @@ class Assessment(BaseModel):
     modality_attention: Dict[str, float]
     trend_drivers: List[Dict[str, Any]]
     ecg: Optional[Dict[str, Any]] = None
+    voice: Optional[Dict[str, Any]] = None
     environment: Dict[str, Any] = Field(default_factory=dict,
                                         description="space-environment hazard index, RIDGE themes, derived values and "
                                                     "the counterfactual environmental risk uplift")

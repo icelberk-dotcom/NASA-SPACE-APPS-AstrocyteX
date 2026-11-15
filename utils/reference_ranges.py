@@ -2,7 +2,7 @@
 Reference ranges and the percentage-based risk scale for every monitored parameter.
 
 This module is the single source of truth for:
-  * which parameters AstroGuard-X monitors (31 physiological + 12 space-environment = 43),
+  * which parameters AstrocyteX monitors (31 physiological + 12 space-environment = 43),
   * their normal / caution / danger limits,
   * how a raw value is converted into a 0-100 % risk score,
   * how a risk score maps to the coloured indicator (gray/green/yellow/red/black).
@@ -95,22 +95,22 @@ def level_color(level: str) -> str:
 # model: Radiation, Isolation & confinement, Distance from Earth, Gravity fields and
 # hostile/closed Environments.
 CATEGORIES: Dict[str, Dict[str, str]] = {
-    "cardiovascular": {"en": "Cardiovascular", "tr": "Kardiyovasküler", "icon": "🫀", "group": "health"},
-    "respiratory": {"en": "Respiratory", "tr": "Solunum", "icon": "🫁", "group": "health"},
-    "stress_thermal": {"en": "Stress & Thermoregulation", "tr": "Stres ve Isı Düzenleme", "icon": "🌡️", "group": "health"},
-    "sleep_activity": {"en": "Sleep & Exercise", "tr": "Uyku ve Egzersiz", "icon": "😴", "group": "health"},
-    "hydration_renal": {"en": "Hydration & Renal", "tr": "Sıvı ve Böbrek", "icon": "💧", "group": "health"},
-    "bone_muscle": {"en": "Bone & Muscle", "tr": "Kemik ve Kas", "icon": "🦴", "group": "health"},
-    "hemogram": {"en": "Hemogram (CBC)", "tr": "Hemogram", "icon": "🩸", "group": "health"},
-    "biochemistry": {"en": "Blood Biochemistry", "tr": "Kan Biyokimyası", "icon": "🧪", "group": "health"},
-    "nutrition": {"en": "Nutrition & Diet", "tr": "Beslenme ve Diyet", "icon": "🥗", "group": "health"},
-    "ecg": {"en": "ECG", "tr": "EKG", "icon": "📈", "group": "health"},
+    "cardiovascular": {"en": "Cardiovascular", "tr": "Kardiyovasküler", "icon": "CVS", "group": "health"},
+    "respiratory": {"en": "Respiratory", "tr": "Solunum", "icon": "RSP", "group": "health"},
+    "stress_thermal": {"en": "Stress & Thermoregulation", "tr": "Stres ve Isı Düzenleme", "icon": "THM", "group": "health"},
+    "sleep_activity": {"en": "Sleep & Exercise", "tr": "Uyku ve Egzersiz", "icon": "SLP", "group": "health"},
+    "hydration_renal": {"en": "Hydration & Renal", "tr": "Sıvı ve Böbrek", "icon": "RNL", "group": "health"},
+    "bone_muscle": {"en": "Bone & Muscle", "tr": "Kemik ve Kas", "icon": "MSK", "group": "health"},
+    "hemogram": {"en": "Hemogram (CBC)", "tr": "Hemogram", "icon": "HEM", "group": "health"},
+    "biochemistry": {"en": "Blood Biochemistry", "tr": "Kan Biyokimyası", "icon": "BIO", "group": "health"},
+    "nutrition": {"en": "Nutrition & Diet", "tr": "Beslenme ve Diyet", "icon": "NUT", "group": "health"},
+    "ecg": {"en": "ECG", "tr": "EKG", "icon": "ECG", "group": "health"},
     # ---- space-environment hazards (NASA HRP "RIDGE") ----------------------------------
-    "radiation": {"en": "Space Radiation", "tr": "Uzay Radyasyonu", "icon": "☢️", "group": "environment"},
-    "isolation": {"en": "Isolation & Confinement", "tr": "İzolasyon ve Kapalı Kalma", "icon": "🔒", "group": "environment"},
-    "distance": {"en": "Distance from Earth", "tr": "Dünya'dan Uzaklık", "icon": "🌍", "group": "environment"},
-    "gravity": {"en": "Gravity Fields", "tr": "Yerçekimi Alanları", "icon": "🪐", "group": "environment"},
-    "habitat": {"en": "Hostile / Closed Environment", "tr": "Zorlu / Kapalı Ortam", "icon": "🌫️", "group": "environment"},
+    "radiation": {"en": "Space Radiation", "tr": "Uzay Radyasyonu", "icon": "RAD", "group": "environment"},
+    "isolation": {"en": "Isolation & Confinement", "tr": "İzolasyon ve Kapalı Kalma", "icon": "ISO", "group": "environment"},
+    "distance": {"en": "Distance from Earth", "tr": "Dünya'dan Uzaklık", "icon": "DST", "group": "environment"},
+    "gravity": {"en": "Gravity Fields", "tr": "Yerçekimi Alanları", "icon": "GRV", "group": "environment"},
+    "habitat": {"en": "Hostile / Closed Environment", "tr": "Zorlu / Kapalı Ortam", "icon": "HAB", "group": "environment"},
 }
 HEALTH_CATEGORIES: List[str] = [k for k, v in CATEGORIES.items() if v["group"] == "health"]
 ENV_CATEGORIES: List[str] = [k for k, v in CATEGORIES.items() if v["group"] == "environment"]

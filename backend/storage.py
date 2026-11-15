@@ -125,6 +125,13 @@ class Storage:
         with self._conn() as c:
             return [dict(r) for r in c.execute(q, args)]
 
+    def update_task_text(self, task_id: int, title: str, description: str, tag: Optional[str] = None) -> None:
+        with self._conn() as c:
+            if tag is not None:
+                c.execute("UPDATE tasks SET title=?, description=?, tag=? WHERE id=?", (title, description, tag, task_id))
+            else:
+                c.execute("UPDATE tasks SET title=?, description=? WHERE id=?", (title, description, task_id))
+
     def complete_task(self, task_id: int) -> bool:
         """Atomically flip pending -> done. Returns False if it was already completed."""
         with self._conn() as c:

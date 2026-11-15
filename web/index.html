@@ -1,541 +1,743 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Astrocyte X · AstroGuard-X — Spaceflight Health & Hazard AI</title>
+  <title>AstrocyteX — Flight Medical Telemetry</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <!-- Interactive Starry Night Sky Canvas -->
-  <canvas id="stars"></canvas>
+  <canvas id="stars" aria-hidden="true"></canvas>
 
-  <!-- Top-Left Floating Glass Menu -->
-  <nav class="menu" id="menu">
-    <button class="menu-button" id="menuButton" aria-haspopup="true" aria-expanded="false">
-      <span>🛰️</span>
-      <span data-i18n="menu">Menü</span>
-      <span class="arrow">▾</span>
-    </button>
-    <ul class="menu-list" id="menuList" role="menu">
-      <li><button role="menuitem" data-page="home"><span data-i18n="home">Ana Ekran</span></button></li>
-      <li class="menu-group expanded">
-        <button role="menuitem" data-page="overall-health" aria-expanded="true">
-          <span data-i18n="overall-health">Genel Sağlık</span>
-        </button>
-        <ul class="submenu" role="menu">
-          <li><button role="menuitem" data-page="mental-health"><span data-i18n="mental-health">Ruh Sağlığı ve Stres</span></button></li>
-          <li><button role="menuitem" data-page="diet"><span data-i18n="diet">Beslenme ve Sıvı</span></button></li>
-          <li><button role="menuitem" data-page="diet-history"><span data-i18n="diet-history">Beslenme Geçmişi</span></button></li>
-          <li><button role="menuitem" data-page="space-radiation"><span data-i18n="space-radiation">Uzay Radyasyonu ve Ortam</span></button></li>
-          <li><button role="menuitem" data-page="exercise-tracker"><span data-i18n="exercise-tracker">Egzersiz ve Fizyoloji</span></button></li>
-          <li><button role="menuitem" data-page="biochemical-statistics"><span data-i18n="biochemical-statistics">Biyokimya ve Hemogram</span></button></li>
-          <li><button role="menuitem" data-page="cardiovascular-statistics"><span data-i18n="cardiovascular-statistics">Kardiyovasküler ve EKG</span></button></li>
+  <div class="app-shell">
+    <!-- ==================== LEFT INSTRUMENT RAIL ==================== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-row">
+          <span class="brand-mark"></span>
+          <span class="brand-name">AstrocyteX</span>
+          <span class="brand-ver">v3.0</span>
+        </div>
+        <div class="brand-meta">Flight Medical Telemetry</div>
+      </div>
+
+      <nav class="sidebar-nav" id="menu" aria-label="Primary Navigation">
+        <div class="nav-section-label">Monitoring</div>
+        <ul class="menu-list" id="menuList">
+          <li><button type="button" data-page="home" class="current">Overview</button></li>
+          <li><button type="button" data-page="overall-health">Health Matrix (43)</button></li>
+          <li><button type="button" data-page="mental-health">Voice &amp; Mood</button></li>
         </ul>
-      </li>
-      <li><button role="menuitem" data-page="experiments"><span data-i18n="experiments">Uzay Deneyleri</span></button></li>
-      <li><button role="menuitem" data-page="progress"><span data-i18n="progress">İlerleme ve YZ Danışman</span></button></li>
-      <li>
-        <button role="menuitem" data-page="rewards">
-          <span data-i18n="rewards">Görevler ve Ödüller</span>
-          <span class="menu-badge" id="menuTasksBadge" hidden>0</span>
-        </button>
-      </li>
-    </ul>
-  </nav>
 
-  <!-- Top-Right Mission Command HUD -->
-  <header class="hud-bar" id="hudBar">
-    <select class="hud-select" id="hudAstronaut" title="Crew ID">
-      <option value="astro-1">👨‍🚀 astro-1 (Cmdr. Vega)</option>
-      <option value="astro-2">👩‍🚀 astro-2 (Dr. Kaya)</option>
-      <option value="astro-3">🧑‍🚀 astro-3 (Spec. Orion)</option>
-    </select>
+        <div class="nav-section-label">Clinical Systems</div>
+        <ul class="menu-list">
+          <li><button type="button" data-page="cardiovascular-statistics">Cardiovascular &amp; ECG</button></li>
+          <li><button type="button" data-page="biochemical-statistics">Biochemistry &amp; CBC</button></li>
+          <li><button type="button" data-page="space-radiation">Space Environment</button></li>
+          <li><button type="button" data-page="exercise-tracker">Exercise &amp; Physiology</button></li>
+        </ul>
 
-    <select class="hud-select" id="hudScenario" title="Demo Clinical Scenario"></select>
-    <select class="hud-select" id="hudProfile" title="NASA Mission Profile"></select>
-
-    <button type="button" class="hud-pill" id="hudHealthPill" title="Overall Physiological Health Risk">
-      <span class="risk-dot gray" id="hudHealthDot"></span>
-      <span id="hudHealthText">--%</span>
-    </button>
-
-    <button type="button" class="hud-pill" id="hudEnvPill" title="NASA RIDGE Space Hazard Index">
-      <span>☢️</span>
-      <span class="risk-dot gray" id="hudEnvDot"></span>
-      <span id="hudEnvText">--%</span>
-    </button>
-
-    <button type="button" class="hud-pill" id="hudXpPill" title="Crew Level, XP & Mitigation Tasks">
-      <span>🏆</span>
-      <span id="hudXpText">Lv 1 · 0 XP</span>
-    </button>
-
-    <button type="button" class="hud-assess-btn" id="hudAssessBtn" data-i18n="runAI">⚡ YZ Değerlendirmesi</button>
-  </header>
-
-  <!-- ==================== 1. HOME SCREEN ==================== -->
-  <main class="screen active" id="home">
-    <div class="home-hero-box">
-      <h2 class="brand-name">Astrocyte X · AstroGuard-X</h2>
-      <h1 class="home-title" data-i18n="healthTracker">Health Tracker</h1>
-      <p class="home-subtitle" data-i18n="subtitle">
-        AI-powered crew health monitoring across 43 biomarkers & NASA RIDGE spaceflight hazards with gamified mitigation.
-      </p>
-
-      <div class="home-status-strip" id="homeStatusStrip"></div>
-      <div class="home-grid" id="homeQuickGrid"></div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X Neural Engine v2.0</footer>
-  </main>
-
-  <!-- ==================== 2. OVERALL HEALTH COMMAND SCREEN ==================== -->
-  <section class="screen" id="overall-health">
-    <h1 class="screen-title" data-i18n="overall-health">Overall Health</h1>
-    <div class="screen-container">
-      <div class="grid-2">
-        <div class="glass-card" id="overallHealthGaugeCard"></div>
-        <div class="glass-card" id="envHazardGaugeCard"></div>
-      </div>
-
-      <div id="aiBriefingBox"></div>
-
-      <div class="glass-card">
-        <h3 class="card-title"><span data-i18n="organSystems">10 Physiological Organ System Risks</span></h3>
-        <div class="grid-5" id="organSystemsGrid"></div>
-      </div>
-
-      <div class="glass-card">
-        <h3 class="card-title"><span data-i18n="ridgeThemes">5 NASA RIDGE Space Hazard Themes</span></h3>
-        <div class="grid-5" id="ridgeThemesGrid"></div>
-      </div>
-
-      <div class="glass-card">
-        <div class="card-title">
-          <span data-i18n="allParameters">All 43 Parameters — Live Risk Matrix</span>
-          <div class="chip-row" id="tableFilterRow"></div>
-        </div>
-        <div class="table-scroll" id="allParamsTableWrap"></div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 3. MENTAL HEALTH & SUBJECTIVE LOG ==================== -->
-  <section class="screen" id="mental-health">
-    <h1 class="screen-title" data-i18n="mental-health">Mental Health</h1>
-    <p class="screen-subtitle" data-i18n="mentalSub"></p>
-    <div class="screen-container">
-      <div class="glass-card">
-        <h3 class="card-title"><span data-i18n="subjLogTitle">Daily Subjective Symptom & Mood Log</span></h3>
-        <div class="chip-row" id="moodQuickChips" style="margin-bottom:10px;"></div>
-        <label class="field" style="margin-bottom:10px;">
-          <textarea id="subjLogInput" rows="3" data-i18n-placeholder="subjPlaceholder" placeholder="How do you feel today?"></textarea>
-        </label>
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-          <div id="detectedSymptomsBox" style="font-size:0.88rem;color:#b8d4ff;"></div>
-          <button type="button" class="btn primary" data-run-ai="1" data-i18n="runAI">⚡ Run AI Assessment</button>
-        </div>
-      </div>
-      <div class="glass-card">
-        <div class="param-grid" id="mentalParamsGrid"></div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 4. DIET & HYDRATION SCREEN ==================== -->
-  <section class="screen" id="diet">
-    <h1 class="screen-title" data-i18n="diet">Diet</h1>
-    <div class="diet-panel">
-      <!-- Live AI Nutrition & Hydration Sync Bridge -->
-      <div class="diet-ai-bar">
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;" id="dietMacroSummary"></div>
-        <button type="button" class="btn primary small" id="syncDietToAIBtn" data-i18n="syncDietAI">
-          🔄 Sync Daily Calories, Protein & Fluid to AI Model
-        </button>
-      </div>
-
-      <div class="diet-topbar">
-        <div class="diet-switcher" id="dietSwitcher">
-          <button type="button" class="diet-switch-button" id="dietSwitchButton" aria-haspopup="true" aria-expanded="false">
-            <span id="dietSwitchLabel" data-i18n="foodItems">Food Items</span>
-            <span class="arrow">▾</span>
-          </button>
-          <ul class="diet-switch-list" role="menu">
-            <li><button type="button" role="menuitem" data-view="food" data-i18n="foodItems">Food Items</button></li>
-            <li><button type="button" role="menuitem" data-view="hydration" data-i18n="hydration">Hydration</button></li>
-          </ul>
-        </div>
-
-        <div class="diet-top-actions">
-          <span class="diet-save-status" id="dietSaveStatus" role="status" aria-live="polite"></span>
-          <button type="button" class="btn primary diet-top-btn" id="dietSaveBtn" data-i18n="save">Save</button>
-          <div class="diet-date-wrap">
-            <button type="button" class="btn diet-top-btn" id="dietDateBtn">
-              <span data-i18n="date">Date</span><span id="dietDateValue"></span>
+        <div class="nav-section-label">Operations &amp; Logs</div>
+        <ul class="menu-list">
+          <li><button type="button" data-page="diet">Nutrition &amp; Hydration</button></li>
+          <li><button type="button" data-page="diet-history">Nutrition Log</button></li>
+          <li><button type="button" data-page="experiments">Experiments</button></li>
+          <li><button type="button" data-page="progress">Trends &amp; Advisor</button></li>
+          <li>
+            <button type="button" data-page="rewards">
+              <span>Countermeasures</span>
+              <span class="menu-badge" id="menuTasksBadge" hidden>0</span>
             </button>
-            <input type="date" class="diet-date-input" id="dietDateInput" tabindex="-1" aria-hidden="true">
-          </div>
-        </div>
+          </li>
+        </ul>
+      </nav>
+
+      <!-- Bottom-Left Concise English User Guide -->
+      <div class="quick-guide" id="quickGuide">
+        <div class="quick-guide-title">Quick Guide</div>
+        <ol class="quick-guide-list">
+          <li>Pick a scenario above or adjust biomarkers in any panel.</li>
+          <li>Record or upload audio in <strong>Voice &amp; Mood</strong>, or load ECG.</li>
+          <li>Select <strong>I am a doctor</strong> or <strong>I am not a doctor</strong>.</li>
+          <li>Click <strong>Run Assessment</strong> to refresh risks &amp; tasks.</li>
+        </ol>
       </div>
+    </aside>
 
-      <div class="diet-view active" id="dietFoodView">
-        <div class="food-layout">
-          <aside class="food-sidebar">
-            <input type="search" class="search-bar food-search" id="foodSearch" autocomplete="off"
-                   data-i18n-placeholder="searchFood" placeholder="Search by name or code...">
-            <button type="button" class="btn primary food-add-btn" id="addFoodBtn" data-i18n="addFoodItem">Add Food Item</button>
-            <ul class="food-sidebar-list" id="foodSidebarList"></ul>
-          </aside>
+    <!-- ==================== MAIN WORKSPACE ==================== -->
+    <div class="workspace">
+      <header class="topbar" id="hudBar">
+        <div class="topbar-left">
+          <button type="button" class="mobile-nav-btn" id="mobileNavBtn" aria-label="Toggle Navigation">Menu</button>
+          <span class="topbar-title" id="topbarSectionTitle">Overview</span>
+        </div>
 
-          <div class="food-main">
-            <div class="food-subpanel active" id="foodMealsPanel">
-              <div class="meal-categories" id="mealCategories" role="tablist">
-                <button type="button" class="meal-tab active" role="tab" data-meal="breakfast" data-i18n="breakfast">Breakfast</button>
-                <button type="button" class="meal-tab" role="tab" data-meal="lunch" data-i18n="lunch">Lunch</button>
-                <button type="button" class="meal-tab" role="tab" data-meal="dinner" data-i18n="dinner">Dinner</button>
-                <button type="button" class="meal-tab" role="tab" data-meal="snack" data-i18n="snack">Snack</button>
-              </div>
+        <div class="topbar-controls">
+          <select class="hud-select" id="hudAstronaut" title="Telemetry Slot" aria-label="Telemetry Slot">
+            <option value="astro-1">Slot 01</option>
+            <option value="astro-2">Slot 02</option>
+            <option value="astro-3">Slot 03</option>
+          </select>
 
-              <p class="meal-select-prompt" id="mealCategoryPrompt" data-i18n="selectMealCategory" hidden></p>
+          <select class="hud-select" id="hudScenario" title="Clinical Scenario" aria-label="Clinical Scenario"></select>
+          <select class="hud-select" id="hudProfile" title="Mission Profile" aria-label="Mission Profile"></select>
 
-              <div class="meal-category-body" id="mealCategoryBody">
-                <form class="meal-add-form" id="mealAddForm" novalidate>
-                  <label class="meal-add-label" for="mealFoodInput" data-i18n="addFood">Add Food</label>
-                  <div class="meal-add-row">
-                    <div class="meal-input-wrap">
-                      <input type="text" class="search-bar meal-food-input" id="mealFoodInput" autocomplete="off"
-                             data-i18n-placeholder="addFoodMealPlaceholder" placeholder="Write food item name or code to add...">
-                      <ul class="meal-suggestions" id="mealSuggestions" hidden></ul>
+          <div class="hud-readouts">
+            <button type="button" class="hud-pill" id="hudHealthPill" title="Integrated Health Risk">
+              <span class="risk-dot gray" id="hudHealthDot"></span>
+              <span class="hud-tag">Health</span>
+              <span id="hudHealthText">--%</span>
+            </button>
+
+            <button type="button" class="hud-pill" id="hudVoicePill" title="Voice &amp; Mood Risk">
+              <span class="risk-dot gray" id="hudVoiceDot"></span>
+              <span class="hud-tag">Voice</span>
+              <span id="hudVoiceText">--%</span>
+            </button>
+
+            <button type="button" class="hud-pill" id="hudEnvPill" title="Space Environment Hazard">
+              <span class="risk-dot gray" id="hudEnvDot"></span>
+              <span class="hud-tag">Habitat</span>
+              <span id="hudEnvText">--%</span>
+            </button>
+
+            <button type="button" class="hud-pill" id="hudXpPill" title="Protocol Progression">
+              <span class="hud-tag">Ops</span>
+              <span id="hudXpText">Lv 1 · 0 XP</span>
+            </button>
+          </div>
+
+          <button type="button" class="hud-assess-btn" id="hudAssessBtn" data-i18n="runAI">Run Assessment</button>
+        </div>
+      </header>
+
+      <div class="viewport">
+        <!-- ==================== 1. OVERVIEW DESK ==================== -->
+        <main class="screen active" id="home">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title">Telemetry Overview</h1>
+              <p class="screen-subtitle">Live multimodal fusion across 43 biomarkers, spaceflight environment hazards, 12-lead ECG, and vocal prosody.</p>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="kpi-strip" id="homeKpiStrip"></div>
+
+            <div class="overview-split">
+              <div class="overview-col">
+                <div class="glass-card">
+                  <div class="card-title">
+                    <span>Assessment Summary</span>
+                    <div class="role-switch">
+                      <button type="button" class="role-btn" data-role-btn="doctor">I am a doctor</button>
+                      <button type="button" class="role-btn active" data-role-btn="non_doctor">I am not a doctor</button>
                     </div>
-                    <button type="submit" class="btn primary meal-submit-btn" data-i18n="addFood">Add Food</button>
                   </div>
-                  <p class="meal-error-msg" id="mealFoodError" hidden></p>
-                </form>
-
-                <div class="meal-amount-box" id="mealAmountBox" hidden>
-                  <div class="meal-amount-header">
-                    <div class="food-item-header">
-                      <span class="food-name" id="mealPendingName"></span>
-                      <span class="food-code-badge" id="mealPendingCode"></span>
-                    </div>
-                    <span class="meal-available-label" id="mealAvailableText"></span>
-                  </div>
-                  <p class="meal-out-of-stock" id="mealOutOfStockMsg" data-i18n="outOfStock" hidden></p>
-                  <div id="mealAmountControls">
-                    <div class="meal-amount-readout-row">
-                      <span class="meal-amount-title" data-i18n="selectAmount">Select Amount</span>
-                      <span class="meal-amount-readout" id="mealAmountReadout"></span>
-                    </div>
-                    <div class="meal-slider-row">
-                      <input type="range" class="meal-amount-slider" id="mealAmountSlider" min="0" max="100" step="1" value="50">
-                      <div class="meal-number-wrap">
-                        <input type="number" class="meal-amount-number" id="mealAmountNumber" min="0" step="any">
-                        <span class="meal-amount-unit" id="mealAmountUnit"></span>
-                      </div>
-                    </div>
-                    <div class="meal-slider-scale">
-                      <span id="mealScaleZero">0%</span>
-                      <span id="mealScaleMax">100%</span>
-                    </div>
-                    <div class="meal-nutrition-preview" id="mealAmountNutritionPreview" hidden></div>
-                  </div>
-                  <div class="modal-actions">
-                    <button type="button" class="btn" id="mealAmountCancelBtn" data-i18n="cancel">Cancel</button>
-                    <button type="button" class="btn primary" id="mealAmountConfirmBtn" data-i18n="confirmAddFood">Confirm & Add</button>
-                  </div>
+                  <div id="homeBriefingBox"></div>
                 </div>
 
-                <ul class="meal-food-list" id="mealFoodList"></ul>
+                <div class="glass-card">
+                  <div class="card-title">
+                    <span>Organ System Risk Distribution</span>
+                    <button type="button" class="btn small" data-nav-target="overall-health">Full 43-Parameter Matrix</button>
+                  </div>
+                  <div class="grid-5" id="homeSystemsGrid"></div>
+                </div>
+              </div>
+
+              <div class="overview-col">
+                <div class="glass-card">
+                  <div class="card-title">
+                    <span>Vocal Prosody &amp; Mood</span>
+                    <button type="button" class="btn small" data-nav-target="mental-health">Open Voice Studio</button>
+                  </div>
+                  <div id="homeVoiceBox"></div>
+                </div>
+
+                <div class="glass-card">
+                  <div class="card-title">
+                    <span>Active Subsystems</span>
+                  </div>
+                  <div class="spec-table" id="homeStatusStrip"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- ==================== 2. OVERALL HEALTH MATRIX ==================== -->
+        <section class="screen" id="overall-health">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="overall-health">Health Matrix</h1>
+              <p class="screen-subtitle">Rule reference intervals fused with AstrocyteX-Net v3.0 uncertainty-calibrated estimates across 31 physiological and 12 environmental channels.</p>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="grid-2">
+              <div class="glass-card" id="overallHealthGaugeCard"></div>
+              <div class="glass-card" id="envHazardGaugeCard"></div>
+            </div>
+
+            <div class="glass-card compact-bar">
+              <div class="role-switch-wrap">
+                <div>
+                  <span class="role-switch-label" data-i18n="roleLabel">Advisor Detail Level:</span>
+                  <span id="briefingRoleHint" class="role-hint-inline"></span>
+                </div>
+                <div class="role-switch">
+                  <button type="button" class="role-btn" data-role-btn="doctor" data-i18n="roleDoctor">I am a doctor</button>
+                  <button type="button" class="role-btn active" data-role-btn="non_doctor" data-i18n="roleNonDoctor">I am not a doctor</button>
+                </div>
               </div>
             </div>
 
-            <div class="food-subpanel" id="foodDetailPanel">
-              <div id="foodDetailContent"></div>
+            <div id="aiBriefingBox"></div>
+
+            <div class="glass-card">
+              <h3 class="card-title"><span data-i18n="organSystems">Physiological Organ Systems (10)</span></h3>
+              <div class="grid-5" id="organSystemsGrid"></div>
             </div>
 
-            <form class="food-subpanel food-form-panel" id="foodFormPanel" novalidate>
-              <h3 class="food-form-title" id="foodFormTitle" data-i18n="addFoodItem">Add Food Item</h3>
-              <div class="food-form-row">
-                <label class="field food-name-field">
-                  <span data-i18n="foodItemName">Food Item Name</span>
-                  <input type="text" id="foodNameInput" maxlength="100" autocomplete="off" data-i18n-placeholder="foodNamePlaceholder">
+            <div class="glass-card">
+              <h3 class="card-title"><span data-i18n="ridgeThemes">Spaceflight Hazard Axes (NASA RIDGE)</span></h3>
+              <div class="grid-5" id="ridgeThemesGrid"></div>
+            </div>
+
+            <div class="glass-card">
+              <div class="card-title">
+                <span data-i18n="allParameters">All 43 Parameters — Live Risk Table</span>
+                <div class="chip-row" id="tableFilterRow"></div>
+              </div>
+              <div class="table-scroll" id="allParamsTableWrap"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 3. VOICE, PSYCHOLOGY & STRESS ==================== -->
+        <section class="screen" id="mental-health">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="mental-health">Voice &amp; Mood Analysis</h1>
+              <p class="screen-subtitle" data-i18n="mentalSub">Vocal acoustic prosody, psychological state &amp; mood dimensions from speech recordings, paired with stress biomarkers and symptom notes.</p>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="glass-card">
+              <div class="card-title">
+                <span data-i18n="voiceStudioTitle">Vocal Acoustic &amp; Psychological Assessment (AstrocyteX-Voice v1.0)</span>
+                <span class="status-chip" id="voiceModelStatusChip">Model Ready</span>
+              </div>
+              <p class="section-note" data-i18n="voiceStudioSub">Record live speech via microphone, upload an audio file (.wav, .mp3, .ogg, .m4a, .webm), or load a reference sample to include vocal risk in the health assessment.</p>
+
+              <div class="voice-controls-bar">
+                <div class="voice-btn-group">
+                  <button type="button" class="btn primary small voice-rec-btn" id="voiceRecordBtn">
+                    <span class="rec-indicator"></span>
+                    <span id="voiceRecordBtnLabel" data-i18n="recStart">Record Audio</span>
+                  </button>
+                  <span class="status-chip" id="voiceRecTimer" hidden>00:00</span>
+
+                  <label class="btn small file-btn">
+                    <span data-i18n="uploadVoice">Upload Audio</span>
+                    <input type="file" id="voiceFileInput" accept=".wav,.mp3,.ogg,.m4a,.webm,.flac,.npy,.csv,audio/*" hidden>
+                  </label>
+
+                  <select class="hud-select" id="voiceSexSelect" title="Reference Pitch Profile" aria-label="Reference Pitch Profile">
+                    <option value="female" data-i18n="voiceSexFemale">Female Pitch Range</option>
+                    <option value="male" data-i18n="voiceSexMale">Male Pitch Range</option>
+                  </select>
+                </div>
+
+                <audio id="voiceAudioPlayer" class="voice-audio-player" controls preload="metadata"></audio>
+              </div>
+
+              <div class="preset-block">
+                <div class="sub-label">Reference Voice Samples</div>
+                <div class="chip-row" id="voiceSampleBtns"></div>
+              </div>
+
+              <div class="grid-2" style="margin-bottom:14px;">
+                <div class="sub-panel" id="voiceRiskGaugeCard"></div>
+                <div class="sub-panel" id="voiceMoodAndStateCard"></div>
+              </div>
+
+              <div>
+                <div class="canvas-head">
+                  <span data-i18n="voiceWaveformTitle">Waveform &amp; 48-Band Log-Mel Spectrogram</span>
+                  <span class="mono-meta" id="voiceClipMetaLabel">16.0 kHz · Mono PCM</span>
+                </div>
+                <canvas class="chart-canvas" id="voiceCanvas" height="215"></canvas>
+              </div>
+
+              <div class="voice-biomarker-grid" id="voiceBiomarkersGrid"></div>
+            </div>
+
+            <div class="glass-card">
+              <h3 class="card-title"><span data-i18n="subjLogTitle">Subjective Symptom &amp; Mood Log</span></h3>
+              <div class="chip-row" id="moodQuickChips" style="margin-bottom:10px;"></div>
+              <label class="field" style="margin-bottom:10px;">
+                <textarea id="subjLogInput" rows="3" data-i18n-placeholder="subjPlaceholder" placeholder="Describe any current symptoms or fatigue (e.g. mild headache, poor sleep, dizziness)..."></textarea>
+              </label>
+              <div class="row-between">
+                <div id="detectedSymptomsBox" class="dim-note"></div>
+                <button type="button" class="btn primary" data-run-ai="1" data-i18n="runAI">Run Assessment</button>
+              </div>
+            </div>
+
+            <div class="glass-card">
+              <h3 class="card-title"><span>Autonomic, Sleep &amp; Confinement Inputs</span></h3>
+              <div class="param-grid" id="mentalParamsGrid"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 4. DIET & HYDRATION ==================== -->
+        <section class="screen" id="diet">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="diet">Nutrition &amp; Hydration</h1>
+              <p class="screen-subtitle">Pantry inventory, daily meal logging, fluid intake tracking, and direct synchronization to physiological model inputs.</p>
+            </div>
+          </div>
+
+          <div class="diet-panel">
+            <div class="diet-ai-bar">
+              <div class="row-wrap" id="dietMacroSummary"></div>
+              <button type="button" class="btn primary small" id="syncDietToAIBtn" data-i18n="syncDietAI">
+                Sync Calories, Protein &amp; Fluid to Model
+              </button>
+            </div>
+
+            <div class="diet-topbar">
+              <div class="diet-switcher" id="dietSwitcher">
+                <button type="button" class="diet-switch-button" id="dietSwitchButton" aria-haspopup="true" aria-expanded="false">
+                  <span id="dietSwitchLabel" data-i18n="foodItems">Food Inventory &amp; Meals</span>
+                  <span class="arrow">&#9662;</span>
+                </button>
+                <ul class="diet-switch-list" role="menu">
+                  <li><button type="button" role="menuitem" data-view="food" data-i18n="foodItems">Food Inventory &amp; Meals</button></li>
+                  <li><button type="button" role="menuitem" data-view="hydration" data-i18n="hydration">Hydration Log</button></li>
+                </ul>
+              </div>
+
+              <div class="diet-top-actions">
+                <span class="diet-save-status" id="dietSaveStatus" role="status" aria-live="polite"></span>
+                <button type="button" class="btn primary diet-top-btn" id="dietSaveBtn" data-i18n="save">Save</button>
+                <div class="diet-date-wrap">
+                  <button type="button" class="btn diet-top-btn" id="dietDateBtn">
+                    <span data-i18n="date">Date</span><span id="dietDateValue"></span>
+                  </button>
+                  <input type="date" class="diet-date-input" id="dietDateInput" tabindex="-1" aria-hidden="true">
+                </div>
+              </div>
+            </div>
+
+            <div class="diet-view active" id="dietFoodView">
+              <div class="food-layout">
+                <aside class="food-sidebar">
+                  <input type="search" class="search-bar food-search" id="foodSearch" autocomplete="off"
+                         data-i18n-placeholder="searchFood" placeholder="Search by name or code...">
+                  <button type="button" class="btn primary food-add-btn" id="addFoodBtn" data-i18n="addFoodItem">Add Food Item</button>
+                  <ul class="food-sidebar-list" id="foodSidebarList"></ul>
+                </aside>
+
+                <div class="food-main">
+                  <div class="food-subpanel active" id="foodMealsPanel">
+                    <div class="meal-categories" id="mealCategories" role="tablist">
+                      <button type="button" class="meal-tab active" role="tab" data-meal="breakfast" data-i18n="breakfast">Breakfast</button>
+                      <button type="button" class="meal-tab" role="tab" data-meal="lunch" data-i18n="lunch">Lunch</button>
+                      <button type="button" class="meal-tab" role="tab" data-meal="dinner" data-i18n="dinner">Dinner</button>
+                      <button type="button" class="meal-tab" role="tab" data-meal="snack" data-i18n="snack">Snack</button>
+                    </div>
+
+                    <p class="meal-select-prompt" id="mealCategoryPrompt" data-i18n="selectMealCategory" hidden></p>
+
+                    <div class="meal-category-body" id="mealCategoryBody">
+                      <form class="meal-add-form" id="mealAddForm" novalidate>
+                        <label class="meal-add-label" for="mealFoodInput" data-i18n="addFood">Add to Meal</label>
+                        <div class="meal-add-row">
+                          <div class="meal-input-wrap">
+                            <input type="text" class="search-bar meal-food-input" id="mealFoodInput" autocomplete="off"
+                                   data-i18n-placeholder="addFoodMealPlaceholder" placeholder="Type food item name or code...">
+                            <ul class="meal-suggestions" id="mealSuggestions" hidden></ul>
+                          </div>
+                          <button type="submit" class="btn primary meal-submit-btn" data-i18n="addFood">Add to Meal</button>
+                        </div>
+                        <p class="meal-error-msg" id="mealFoodError" hidden></p>
+                      </form>
+
+                      <div class="meal-amount-box" id="mealAmountBox" hidden>
+                        <div class="meal-amount-header">
+                          <div class="food-item-header">
+                            <span class="food-name" id="mealPendingName"></span>
+                            <span class="food-code-badge" id="mealPendingCode"></span>
+                          </div>
+                          <span class="meal-available-label" id="mealAvailableText"></span>
+                        </div>
+                        <p class="meal-out-of-stock" id="mealOutOfStockMsg" data-i18n="outOfStock" hidden></p>
+                        <div id="mealAmountControls">
+                          <div class="meal-amount-readout-row">
+                            <span class="meal-amount-title" data-i18n="selectAmount">Select Portion Amount</span>
+                            <span class="meal-amount-readout" id="mealAmountReadout"></span>
+                          </div>
+                          <div class="meal-slider-row">
+                            <input type="range" class="meal-amount-slider" id="mealAmountSlider" min="0" max="100" step="1" value="50">
+                            <div class="meal-number-wrap">
+                              <input type="number" class="meal-amount-number" id="mealAmountNumber" min="0" step="any">
+                              <span class="meal-amount-unit" id="mealAmountUnit"></span>
+                            </div>
+                          </div>
+                          <div class="meal-slider-scale">
+                            <span id="mealScaleZero">0%</span>
+                            <span id="mealScaleMax">100%</span>
+                          </div>
+                          <div class="meal-nutrition-preview" id="mealAmountNutritionPreview" hidden></div>
+                        </div>
+                        <div class="modal-actions">
+                          <button type="button" class="btn" id="mealAmountCancelBtn" data-i18n="cancel">Cancel</button>
+                          <button type="button" class="btn primary" id="mealAmountConfirmBtn" data-i18n="confirmAddFood">Confirm &amp; Add</button>
+                        </div>
+                      </div>
+
+                      <ul class="meal-food-list" id="mealFoodList"></ul>
+                    </div>
+                  </div>
+
+                  <div class="food-subpanel" id="foodDetailPanel">
+                    <div id="foodDetailContent"></div>
+                  </div>
+
+                  <form class="food-subpanel food-form-panel" id="foodFormPanel" novalidate>
+                    <h3 class="food-form-title" id="foodFormTitle" data-i18n="addFoodItem">Add Food Item</h3>
+                    <div class="food-form-row">
+                      <label class="field food-name-field">
+                        <span data-i18n="foodItemName">Food Item Name</span>
+                        <input type="text" id="foodNameInput" maxlength="100" autocomplete="off" data-i18n-placeholder="foodNamePlaceholder">
+                      </label>
+                      <label class="field food-code-field">
+                        <span data-i18n="foodCode">Food Code</span>
+                        <input type="text" id="foodCodeInput" maxlength="30" autocomplete="off" data-i18n-placeholder="foodCodePlaceholder">
+                      </label>
+                    </div>
+                    <label class="field">
+                      <span data-i18n="nutritionalValues">Nutritional Values</span>
+                      <textarea id="foodNutritionInput" rows="3" data-i18n-placeholder="nutritionPlaceholder"></textarea>
+                    </label>
+                    <label class="field">
+                      <span data-i18n="amount">Stock Amount</span>
+                      <input type="text" id="foodAmountInput" maxlength="50" autocomplete="off" data-i18n-placeholder="amountPlaceholder">
+                    </label>
+                    <div class="modal-actions">
+                      <button type="button" class="btn" id="foodCancelBtn" data-i18n="cancel">Cancel</button>
+                      <button type="submit" class="btn primary" data-i18n="save">Save</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <div class="diet-view" id="dietHydrationView">
+              <div class="hydration-layout">
+                <aside class="hydration-sidebar">
+                  <button type="button" class="btn primary hydration-add-btn" id="addHydrationBtn" data-i18n="addHydrationData">Add Hydration Entry</button>
+                </aside>
+                <div class="hydration-main">
+                  <div class="food-subpanel active" id="hydrationListPanel">
+                    <h3 class="hydration-title" data-i18n="hydration">Hydration Log</h3>
+                    <ul class="hydration-list" id="hydrationList"></ul>
+                  </div>
+                  <form class="food-subpanel hydration-form-panel" id="hydrationFormPanel" novalidate>
+                    <h3 class="food-form-title" id="hydrationFormTitle" data-i18n="addHydrationData">Add Hydration Entry</h3>
+                    <label class="field">
+                      <span data-i18n="volumeOfWater">Fluid Volume</span>
+                      <input type="text" id="hydrationVolumeInput" maxlength="80" autocomplete="off" data-i18n-placeholder="volumePlaceholder">
+                    </label>
+                    <label class="field">
+                      <span data-i18n="addedSupplements">Added Supplements</span>
+                      <textarea id="hydrationSupplementsInput" rows="3" data-i18n-placeholder="supplementsPlaceholder"></textarea>
+                    </label>
+                    <div class="modal-actions">
+                      <button type="button" class="btn" id="hydrationCancelBtn" data-i18n="cancel">Cancel</button>
+                      <button type="submit" class="btn primary" data-i18n="save">Save</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="glass-card">
+              <h3 class="card-title"><span>Nutrition &amp; Renal Biomarker Inputs</span></h3>
+              <div class="param-grid" id="dietParamsGrid"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 5. DIET HISTORY ==================== -->
+        <section class="screen" id="diet-history">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="diet-history">Nutrition Log</h1>
+              <p class="screen-subtitle">Saved daily meal records and crew palatability ratings.</p>
+            </div>
+          </div>
+
+          <div class="history-panel">
+            <div class="history-table" role="table">
+              <div class="history-row history-head" role="row">
+                <div class="history-cell" data-i18n="date">Date</div>
+                <div class="history-cell" data-i18n="breakfast">Breakfast</div>
+                <div class="history-cell" data-i18n="lunch">Lunch</div>
+                <div class="history-cell" data-i18n="dinner">Dinner</div>
+                <div class="history-cell" data-i18n="snack">Snack</div>
+                <div class="history-cell history-rating-cell" data-i18n="rating">Rating</div>
+              </div>
+              <div class="history-body" id="historyBody"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 6. SPACE RADIATION & ENVIRONMENT ==================== -->
+        <section class="screen" id="space-radiation">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="space-radiation">Space Environment &amp; Radiation</h1>
+              <p class="screen-subtitle" data-i18n="radSub">NASA HRP 5-hazard exposure model (Radiation, Isolation, Distance, Gravity, Closed Habitat), mission profiles, and off-nominal event simulation.</p>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="glass-card">
+              <div class="row-between" style="margin-bottom:14px;">
+                <div class="row-wrap">
+                  <label class="ctrl-inline-label" data-i18n="missionDay">Mission Day</label>
+                  <input type="range" id="missionDaySlider" min="0" max="900" step="1" value="90" class="inline-slider">
+                  <span class="status-chip" id="missionDayBadge">Day 90</span>
+                </div>
+                <button type="button" class="btn primary" data-run-ai="1" data-i18n="runAI">Run Assessment</button>
+              </div>
+              <div class="preset-block">
+                <div class="sub-label" data-i18n="profile">Mission Profile</div>
+                <div class="chip-row" id="profileChipsRow"></div>
+              </div>
+              <div>
+                <div class="sub-label warn-text" data-i18n="injectEvent">Simulate Off-Nominal Event</div>
+                <div class="chip-row" id="eventChipsRow"></div>
+              </div>
+            </div>
+
+            <div class="grid-3" id="envDerivedCards"></div>
+
+            <div class="glass-card">
+              <h3 class="card-title"><span>Environmental Channel Inputs (12)</span></h3>
+              <div class="param-grid" id="envParamsGrid"></div>
+            </div>
+
+            <div class="glass-card">
+              <h3 class="card-title"><span data-i18n="hazardAttention">EnvironmentEncoder Hazard Attention Weights</span></h3>
+              <div id="hazardAttentionBars"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 7. EXERCISE & NEURAL ODE ==================== -->
+        <section class="screen" id="exercise-tracker">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="exercise-tracker">Exercise &amp; Physiology</h1>
+              <p class="screen-subtitle" data-i18n="exSub">Countermeasure loading (ARED, T2 treadmill, CEVIS cycle) and physics-informed Neural ODE +30 / +90 / +180-day bone, muscle, and fluid projections.</p>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="glass-card">
+              <div class="row-between" style="margin-bottom:12px;">
+                <div class="chip-row">
+                  <button type="button" class="chip-btn" data-workout="45">+45 min ARED Resistance</button>
+                  <button type="button" class="chip-btn" data-workout="30">+30 min T2 Treadmill</button>
+                  <button type="button" class="chip-btn" data-workout="30">+30 min CEVIS Cycle</button>
+                  <button type="button" class="chip-btn" data-workout="-120">Reset (0 min)</button>
+                </div>
+                <button type="button" class="btn primary" data-run-ai="1" data-i18n="runAI">Run Assessment</button>
+              </div>
+              <div class="param-grid" id="exerciseParamsGrid"></div>
+            </div>
+
+            <div class="glass-card">
+              <h3 class="card-title"><span data-i18n="odeProjections">Physics-Informed Physiology Projections (+30 / +90 / +180 Days)</span></h3>
+              <canvas class="chart-canvas" id="odeCanvas" height="235"></canvas>
+              <div class="grid-4" id="odeMetricsRow" style="margin-top:12px;"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 8. BIOCHEMISTRY & CBC ==================== -->
+        <section class="screen" id="biochemical-statistics">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="biochemical-statistics">Biochemistry &amp; Hematology</h1>
+              <p class="screen-subtitle" data-i18n="bioSub">Metabolic chemistry, complete blood count (CBC), renal markers, and endocrine stress panels.</p>
+            </div>
+            <button type="button" class="btn primary" data-run-ai="1" data-i18n="runAI">Run Assessment</button>
+          </div>
+
+          <div class="screen-container">
+            <div class="glass-card">
+              <div class="param-grid" id="biochemParamsGrid"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 9. CARDIOVASCULAR & 12-LEAD ECG ==================== -->
+        <section class="screen" id="cardiovascular-statistics">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="cardiovascular-statistics">Cardiovascular &amp; 12-Lead ECG</h1>
+              <p class="screen-subtitle" data-i18n="cardioSub">24-hour continuous wearable telemetry stream (Mamba-2 state-space window) and 12-lead diagnostic ECG waveform classification.</p>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="glass-card">
+              <div class="card-title">
+                <span data-i18n="telemetryStream">24-Hour Wearable Telemetry Stream</span>
+                <div class="row-wrap">
+                  <button type="button" class="btn small" id="simTelemetryBtn" data-i18n="simTelemetry">Refresh Sensor Window</button>
+                  <button type="button" class="btn primary small" data-run-ai="1" data-i18n="runAI">Run Assessment</button>
+                </div>
+              </div>
+              <canvas class="chart-canvas" id="telemetryCanvas" height="210"></canvas>
+              <div class="param-grid" id="cardioParamsGrid" style="margin-top:14px;"></div>
+            </div>
+
+            <div class="glass-card">
+              <div class="card-title">
+                <span data-i18n="ecgTitle">12-Lead ECG Diagnostic Analyzer</span>
+                <span class="status-chip" id="ecgModeBadge">ECG Ready</span>
+              </div>
+              <div class="row-between" style="margin-bottom:12px;">
+                <div class="chip-row" id="ecgSampleBtns"></div>
+                <label class="btn small file-btn">
+                  <span data-i18n="uploadEcg">Upload ECG (.npy / .npz / .csv / .mat)</span>
+                  <input type="file" id="ecgFileInput" accept=".npy,.npz,.csv,.mat,.dat,.txt" hidden>
                 </label>
-                <label class="field food-code-field">
-                  <span data-i18n="foodCode">Food Code</span>
-                  <input type="text" id="foodCodeInput" maxlength="30" autocomplete="off" data-i18n-placeholder="foodCodePlaceholder">
-                </label>
               </div>
-              <label class="field">
-                <span data-i18n="nutritionalValues">Nutritional Values</span>
-                <textarea id="foodNutritionInput" rows="3" data-i18n-placeholder="nutritionPlaceholder"></textarea>
-              </label>
-              <label class="field">
-                <span data-i18n="amount">Amount</span>
-                <input type="text" id="foodAmountInput" maxlength="50" autocomplete="off" data-i18n-placeholder="amountPlaceholder">
-              </label>
-              <div class="modal-actions">
-                <button type="button" class="btn" id="foodCancelBtn" data-i18n="cancel">Cancel</button>
-                <button type="submit" class="btn primary" data-i18n="save">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      <div class="diet-view" id="dietHydrationView">
-        <div class="hydration-layout">
-          <aside class="hydration-sidebar">
-            <button type="button" class="btn primary hydration-add-btn" id="addHydrationBtn" data-i18n="addHydrationData">Add Hydration Data</button>
-          </aside>
-          <div class="hydration-main">
-            <div class="food-subpanel active" id="hydrationListPanel">
-              <h3 class="hydration-title" data-i18n="hydration">Hydration</h3>
-              <ul class="hydration-list" id="hydrationList"></ul>
+              <div id="ecgResultBanner" style="margin-bottom:12px;"></div>
+              <canvas class="chart-canvas" id="ecgCanvas" height="265"></canvas>
+              <div id="ecgProbBars" style="margin-top:12px;"></div>
             </div>
-            <form class="food-subpanel hydration-form-panel" id="hydrationFormPanel" novalidate>
-              <h3 class="food-form-title" id="hydrationFormTitle" data-i18n="addHydrationData">Add Hydration Data</h3>
-              <label class="field">
-                <span data-i18n="volumeOfWater">Volume of Water</span>
-                <input type="text" id="hydrationVolumeInput" maxlength="80" autocomplete="off" data-i18n-placeholder="volumePlaceholder">
-              </label>
-              <label class="field">
-                <span data-i18n="addedSupplements">Added Supplements</span>
-                <textarea id="hydrationSupplementsInput" rows="3" data-i18n-placeholder="supplementsPlaceholder"></textarea>
-              </label>
-              <div class="modal-actions">
-                <button type="button" class="btn" id="hydrationCancelBtn" data-i18n="cancel">Cancel</button>
-                <button type="submit" class="btn primary" data-i18n="save">Save</button>
+          </div>
+        </section>
+
+        <!-- ==================== 10. SPACE EXPERIMENTS ==================== -->
+        <section class="screen" id="experiments">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="experiments">Payload &amp; Biomedical Experiments</h1>
+              <p class="screen-subtitle">On-orbit experimental protocols, tracked physiological variables, and logged observations.</p>
+            </div>
+          </div>
+
+          <div class="experiments-panel">
+            <div class="panel-header">
+              <h2 class="panel-title" data-i18n="list">Experiment Log</h2>
+              <button type="button" class="btn primary" id="addExperimentBtn" data-i18n="addExperiment">Add Experiment</button>
+            </div>
+            <input type="search" class="search-bar" id="experimentSearch" autocomplete="off"
+                   data-i18n-placeholder="searchExperiments" placeholder="Filter by title or variable...">
+            <ul class="experiment-list" id="experimentList"></ul>
+          </div>
+        </section>
+
+        <!-- ==================== 11. TRENDS & ROLE-ADAPTIVE ADVISOR ==================== -->
+        <section class="screen" id="progress">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="progress">Longitudinal Trends &amp; Advisor</h1>
+              <p class="screen-subtitle" data-i18n="progressSub">Historical risk trajectory, 7-day Temporal Fusion Transformer forecast, modality attribution, and role-adaptive clinical Q&amp;A.</p>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="grid-2">
+              <div class="glass-card">
+                <h3 class="card-title"><span data-i18n="historyChart">Assessment Risk History (%)</span></h3>
+                <canvas class="chart-canvas" id="historyCanvas" height="210"></canvas>
               </div>
-            </form>
+              <div class="glass-card">
+                <h3 class="card-title"><span data-i18n="forecastChart">7-Day Risk Trajectory Forecast</span></h3>
+                <canvas class="chart-canvas" id="forecastCanvas" height="210"></canvas>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="glass-card">
+                <h3 class="card-title"><span data-i18n="modalityTitle">Modality Cross-Attention &amp; Trend Drivers</span></h3>
+                <div id="modalityBarsBox"></div>
+              </div>
+              <div class="glass-card">
+                <h3 class="card-title">
+                  <span data-i18n="advisorChat">AstrocyteX Medical Advisor</span>
+                  <span class="status-chip" id="geminiStatusBadge">Ready</span>
+                </h3>
+
+                <div class="role-switch-wrap">
+                  <span class="role-switch-label" data-i18n="roleLabel">Advisor Detail Level:</span>
+                  <div class="role-switch">
+                    <button type="button" class="role-btn" data-role-btn="doctor" data-i18n="roleDoctor">I am a doctor</button>
+                    <button type="button" class="role-btn active" data-role-btn="non_doctor" data-i18n="roleNonDoctor">I am not a doctor</button>
+                  </div>
+                </div>
+                <div id="chatRoleHint" class="dim-note" style="margin-bottom:8px;"></div>
+
+                <div class="chat-messages" id="chatMessagesBox"></div>
+                <form id="chatForm" class="chat-form-row">
+                  <input type="text" class="search-bar" id="chatInput" style="margin-bottom:0;"
+                         data-i18n-placeholder="chatPlaceholder" placeholder="Ask about biomarkers, vocal stress, radiation exposure, or countermeasures...">
+                  <button type="submit" class="btn primary" data-i18n="sendBtn">Send</button>
+                </form>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </section>
 
-    <div class="screen-container" style="max-width:1180px;">
-      <div class="glass-card">
-        <div class="param-grid" id="dietParamsGrid"></div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 5. DIET HISTORY SCREEN ==================== -->
-  <section class="screen" id="diet-history">
-    <h1 class="screen-title" data-i18n="diet-history">Diet History</h1>
-    <div class="history-panel">
-      <div class="history-table" role="table">
-        <div class="history-row history-head" role="row">
-          <div class="history-cell" data-i18n="date">Date</div>
-          <div class="history-cell" data-i18n="breakfast">Breakfast</div>
-          <div class="history-cell" data-i18n="lunch">Lunch</div>
-          <div class="history-cell" data-i18n="dinner">Dinner</div>
-          <div class="history-cell" data-i18n="snack">Snack</div>
-          <div class="history-cell history-rating-cell" data-i18n="rating">Rating</div>
-        </div>
-        <div class="history-body" id="historyBody"></div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 6. SPACE RADIATION & NASA RIDGE ENVIRONMENT ==================== -->
-  <section class="screen" id="space-radiation">
-    <h1 class="screen-title" data-i18n="space-radiation">Space Radiation</h1>
-    <p class="screen-subtitle" data-i18n="radSub"></p>
-    <div class="screen-container">
-      <div class="glass-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:14px;">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <label style="font-weight:700;font-size:0.92rem;" data-i18n="missionDay">Mission Day</label>
-            <input type="range" id="missionDaySlider" min="0" max="900" step="1" value="90" style="width:200px;accent-color:#6ea8ff;">
-            <span class="status-chip" id="missionDayBadge">Day 90</span>
+        <!-- ==================== 12. COUNTERMEASURES & PROGRESSION ==================== -->
+        <section class="screen" id="rewards">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="rewards">Countermeasure Protocols</h1>
+              <p class="screen-subtitle" data-i18n="rewardsSub">Actionable operational protocols triggered by off-nominal physiological, vocal, or environmental findings.</p>
+            </div>
           </div>
-          <button type="button" class="btn primary" data-run-ai="1" data-i18n="runAI">⚡ Run AI Assessment</button>
-        </div>
-        <div style="margin-bottom:12px;">
-          <div style="font-size:0.85rem;color:#b8d2ff;margin-bottom:6px;font-weight:600;" data-i18n="profile">Mission Profile</div>
-          <div class="chip-row" id="profileChipsRow"></div>
-        </div>
-        <div>
-          <div style="font-size:0.85rem;color:#ffe28a;margin-bottom:6px;font-weight:600;" data-i18n="injectEvent">Inject Off-Nominal Event</div>
-          <div class="chip-row" id="eventChipsRow"></div>
-        </div>
-      </div>
 
-      <div class="grid-3" id="envDerivedCards"></div>
+          <div class="screen-container">
+            <div class="glass-card" id="gamificationHeroCard"></div>
 
-      <div class="glass-card">
-        <div class="param-grid" id="envParamsGrid"></div>
-      </div>
+            <div class="grid-2">
+              <div class="glass-card">
+                <h3 class="card-title"><span data-i18n="activeTasks">Pending Protocols</span></h3>
+                <div id="activeTasksList"></div>
+              </div>
+              <div class="glass-card">
+                <h3 class="card-title"><span data-i18n="doneTasks">Completed Protocols</span></h3>
+                <div id="doneTasksList"></div>
+              </div>
+            </div>
 
-      <div class="glass-card">
-        <h3 class="card-title"><span data-i18n="hazardAttention">EnvironmentEncoder Hazard Self-Attention Weights</span></h3>
-        <div id="hazardAttentionBars"></div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 7. EXERCISE TRACKER & NEURAL ODE ==================== -->
-  <section class="screen" id="exercise-tracker">
-    <h1 class="screen-title" data-i18n="exercise-tracker">Exercise Tracker</h1>
-    <p class="screen-subtitle" data-i18n="exSub"></p>
-    <div class="screen-container">
-      <div class="glass-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-          <div class="chip-row">
-            <button type="button" class="chip-btn" data-workout="45">🏋️ +45m ARED</button>
-            <button type="button" class="chip-btn" data-workout="30">🏃 +30m T2 Treadmill</button>
-            <button type="button" class="chip-btn" data-workout="30">🚴 +30m CEVIS Cycle</button>
-            <button type="button" class="chip-btn" data-workout="-120">↺ Reset (0m)</button>
+            <div class="glass-card">
+              <h3 class="card-title"><span data-i18n="badgesTitle">Operational Milestones (18)</span></h3>
+              <div class="badge-grid" id="badgesGrid"></div>
+            </div>
           </div>
-          <button type="button" class="btn primary" data-run-ai="1" data-i18n="runAI">⚡ Run AI Assessment</button>
-        </div>
-        <div class="param-grid" id="exerciseParamsGrid"></div>
-      </div>
-
-      <div class="glass-card">
-        <h3 class="card-title"><span data-i18n="odeProjections">Neural ODE + PINN Projections (+30 / +90 / +180 Days)</span></h3>
-        <canvas class="chart-canvas" id="odeCanvas" height="240"></canvas>
-        <div class="grid-4" id="odeMetricsRow" style="margin-top:14px;"></div>
+        </section>
       </div>
     </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 8. BIOCHEMICAL & HEMOGRAM STATISTICS ==================== -->
-  <section class="screen" id="biochemical-statistics">
-    <h1 class="screen-title" data-i18n="biochemical-statistics">Biochemical Statistics</h1>
-    <p class="screen-subtitle" data-i18n="bioSub"></p>
-    <div class="screen-container">
-      <div class="glass-card">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-          <button type="button" class="btn primary" data-run-ai="1" data-i18n="runAI">⚡ Run AI Assessment</button>
-        </div>
-        <div class="param-grid" id="biochemParamsGrid"></div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 9. CARDIOVASCULAR TELEMETRY & 12-LEAD ECG ==================== -->
-  <section class="screen" id="cardiovascular-statistics">
-    <h1 class="screen-title" data-i18n="cardiovascular-statistics">Cardiovascular Statistics</h1>
-    <p class="screen-subtitle" data-i18n="cardioSub"></p>
-    <div class="screen-container">
-      <div class="glass-card">
-        <div class="card-title">
-          <span data-i18n="telemetryStream">24-Hour Wearable Sensor Stream (Mamba-2 Window)</span>
-          <div style="display:flex;gap:8px;">
-            <button type="button" class="btn small" id="simTelemetryBtn" data-i18n="simTelemetry">🔄 Simulate Sensor Stream</button>
-            <button type="button" class="btn primary small" data-run-ai="1" data-i18n="runAI">⚡ Run AI Assessment</button>
-          </div>
-        </div>
-        <canvas class="chart-canvas" id="telemetryCanvas" height="210"></canvas>
-        <div class="param-grid" id="cardioParamsGrid" style="margin-top:14px;"></div>
-      </div>
-
-      <div class="glass-card">
-        <div class="card-title">
-          <span data-i18n="ecgTitle">12-Lead ECG AI Analyser (TEKNOFEST V23)</span>
-          <span class="status-chip" id="ecgModeBadge">ECG Ready</span>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-          <div class="chip-row" id="ecgSampleBtns"></div>
-          <label class="btn small" style="cursor:pointer;">
-            📂 <span data-i18n="uploadEcg">Upload ECG File</span>
-            <input type="file" id="ecgFileInput" accept=".npy,.npz,.csv,.mat,.dat,.txt" hidden>
-          </label>
-        </div>
-        <div id="ecgResultBanner" style="margin-bottom:12px;"></div>
-        <canvas class="chart-canvas" id="ecgCanvas" height="270"></canvas>
-        <div id="ecgProbBars" style="margin-top:12px;"></div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 10. EXPERIMENTS SCREEN ==================== -->
-  <section class="screen" id="experiments">
-    <h1 class="screen-title" data-i18n="experiments">Experiments</h1>
-    <div class="experiments-panel">
-      <div class="panel-header">
-        <h2 class="panel-title" data-i18n="list">Experiments List</h2>
-        <button type="button" class="btn primary" id="addExperimentBtn" data-i18n="addExperiment">Add Experiment</button>
-      </div>
-      <input type="search" class="search-bar" id="experimentSearch" autocomplete="off"
-             data-i18n-placeholder="searchExperiments" placeholder="Search experiments...">
-      <ul class="experiment-list" id="experimentList"></ul>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 11. PROGRESS & AI FLIGHT SURGEON ADVISOR ==================== -->
-  <section class="screen" id="progress">
-    <h1 class="screen-title" data-i18n="progress">Progress</h1>
-    <p class="screen-subtitle" data-i18n="progressSub"></p>
-    <div class="screen-container">
-      <div class="grid-2">
-        <div class="glass-card">
-          <h3 class="card-title"><span data-i18n="historyChart">Assessment History</span></h3>
-          <canvas class="chart-canvas" id="historyCanvas" height="210"></canvas>
-        </div>
-        <div class="glass-card">
-          <h3 class="card-title"><span data-i18n="forecastChart">7-Day TFT Risk Forecast</span></h3>
-          <canvas class="chart-canvas" id="forecastCanvas" height="210"></canvas>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="glass-card">
-          <h3 class="card-title"><span data-i18n="modalityTitle">5-Modality & Variable Importance</span></h3>
-          <div id="modalityBarsBox"></div>
-        </div>
-        <div class="glass-card">
-          <h3 class="card-title">
-            <span data-i18n="advisorChat">AI Flight Surgeon Advisor</span>
-            <span class="status-chip" id="geminiStatusBadge">AI</span>
-          </h3>
-          <div class="chat-messages" id="chatMessagesBox"></div>
-          <form id="chatForm" style="display:flex;gap:8px;">
-            <input type="text" class="search-bar" id="chatInput" style="margin-bottom:0;"
-                   data-i18n-placeholder="chatPlaceholder" placeholder="Ask about your biomarkers...">
-            <button type="submit" class="btn primary" data-i18n="sendBtn">Send</button>
-          </form>
-        </div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
-
-  <!-- ==================== 12. REWARDS, MITIGATION TASKS & BADGES ==================== -->
-  <section class="screen" id="rewards">
-    <h1 class="screen-title" data-i18n="rewards">Rewards</h1>
-    <p class="screen-subtitle" data-i18n="rewardsSub"></p>
-    <div class="screen-container">
-      <div class="glass-card" id="gamificationHeroCard"></div>
-
-      <div class="grid-2">
-        <div class="glass-card">
-          <h3 class="card-title"><span data-i18n="activeTasks">Active Mitigation Tasks</span></h3>
-          <div id="activeTasksList"></div>
-        </div>
-        <div class="glass-card">
-          <h3 class="card-title"><span data-i18n="doneTasks">Completed Tasks</span></h3>
-          <div id="doneTasksList"></div>
-        </div>
-      </div>
-
-      <div class="glass-card">
-        <h3 class="card-title"><span data-i18n="badgesTitle">Spaceflight Badge Collection</span></h3>
-        <div class="badge-grid" id="badgesGrid"></div>
-      </div>
-    </div>
-    <footer class="brand-footer">Astrocyte X · AstroGuard-X</footer>
-  </section>
+  </div>
 
   <!-- Experiment Add/Edit Modal -->
   <div class="modal" id="experimentModal" hidden>
@@ -546,15 +748,15 @@
         <input type="text" id="experimentName" maxlength="100" autocomplete="off" data-i18n-placeholder="namePlaceholder">
       </label>
       <label class="field">
-        <span data-i18n="variables">Variables</span>
+        <span data-i18n="variables">Tracked Variables</span>
         <input type="text" id="experimentVariables" maxlength="200" autocomplete="off" data-i18n-placeholder="variablesPlaceholder">
       </label>
       <label class="field">
-        <span data-i18n="results">Results</span>
+        <span data-i18n="results">Observed Results</span>
         <textarea id="experimentResults" rows="3" data-i18n-placeholder="resultsPlaceholder"></textarea>
       </label>
       <label class="field">
-        <span data-i18n="additionalDetails">Additional Details</span>
+        <span data-i18n="additionalDetails">Protocol Notes</span>
         <textarea id="experimentDetails" rows="4" data-i18n-placeholder="detailsPlaceholder"></textarea>
       </label>
       <div class="modal-actions">
@@ -564,17 +766,6 @@
     </form>
   </div>
 
-  <!-- Bottom-Right Upward Language Selector -->
-  <div class="lang" id="lang">
-    <ul class="lang-list" id="langList" role="listbox"></ul>
-    <button class="lang-button" id="langButton" aria-haspopup="listbox" aria-expanded="false">
-      <span>🌐</span>
-      <span data-i18n="language">Dil</span>
-      <span class="arrow">▴</span>
-    </button>
-  </div>
-
-  <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
   <script src="/static/i18n.js"></script>

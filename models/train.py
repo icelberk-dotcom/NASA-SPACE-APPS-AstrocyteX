@@ -1,7 +1,7 @@
 """
-Train AstroGuard-X (v2) on simulated crews.
+Train AstrocyteX-Net (v3.0) on simulated crews.
 
-    python -m models.train --samples 30000 --epochs 40          # full training (GPU if available)
+    python -m models.train --samples 42000 --epochs 50          # full training (GPU if available)
     python -m models.train --samples 2000 --epochs 3 --workers 1  # quick smoke run
 
 The composite loss mirrors the architecture:
@@ -15,12 +15,12 @@ The composite loss mirrors the architecture:
        + w_r  * PINN residual         dz/dt must follow the physics prior
        + w_c  * collocation + constraints
 
-Training recipe (v2)
---------------------
+Training recipe (v3.0)
+----------------------
 * strictly disjoint simulated crews for train / validation (different seeds); the final
   test set used in ``models.evaluate`` uses yet another seed and is never seen here;
 * AdamW + OneCycle learning-rate schedule, gradient clipping, KL annealing;
-* the **ordinal band loss** optimises exactly what the dashboard shows - the colour band -
+* the **ordinal band loss** optimises what the dashboard shows - the colour band -
   with larger weights on the safety-critical red/black thresholds;
 * an **exponential moving average (EMA)** of the weights is evaluated every epoch and the
   best EMA weights by validation MCC are kept (early stopping).
@@ -47,8 +47,8 @@ from utils.synthetic_data import META_KEYS, generate_dataset
 KL_BETA = 5e-3  # tempered Bayesian posterior: full-strength KL would swamp the data term
 BATCH_KEYS = ["seq", "daily", "history", "subj", "mission", "controls"]
 BAND_THRESHOLDS = torch.tensor([0.15, 0.40, 0.70, 0.90])
-BAND_WEIGHTS = torch.tensor([1.0, 1.0, 1.5, 2.0])  # red/black boundaries matter most clinically
-ORDINAL_TAU = 0.02  # sharpness of the soft band boundaries (2 percentage points)
+BAND_WEIGHTS = torch.tensor([1.0, 1.15, 1.85, 2.75])  # red/black boundaries matter most clinically
+ORDINAL_TAU = 0.016  # sharpness of the soft band boundaries (1.6 percentage points)
 
 
 def default_device() -> torch.device:
@@ -89,7 +89,7 @@ def compute_loss(model: AstroGuardNet, batch: Dict[str, torch.Tensor], n_train: 
     z0_err = (((out["physics"]["z0"] - target[:, 0]) / scale) ** 2).mean()
     pinn = model.physics.pinn_losses(traj, batch["controls"], out["physics"]["ctx_h"])
 
-    total = (nll + 4.0 * mse_mean + 0.05 * ordinal + kl_weight * KL_BETA * kl + 2.0 * forecast + 1.0 * phys_data
+    total = (nll + 4.2 * mse_mean + 0.20 * ordinal + kl_weight * KL_BETA * kl + 2.0 * forecast + 1.0 * phys_data
              + 1.0 * z0_err + 0.5 * pinn["residual"] + 0.05 * pinn["collocation"] + 1.0 * pinn["constraints"])
     parts = {"loss": total.item(), "nll": nll.item(), "mse": mse_mean.item(), "ord": ordinal.item(), "kl": kl.item(),
              "forecast": forecast.item(), "phys": phys_data.item(), "pinn_res": pinn["residual"].item()}
@@ -149,7 +149,7 @@ def train(samples: int = 30000, epochs: int = 40, batch_size: int = 128, lr: flo
     model = AstroGuardNet(cfg or ModelConfig()).to(dev)
     n_params = sum(p.numel() for p in model.parameters())
     if verbose:
-        print(f"[train] AstroGuardNet v2: {n_params / 1e6:.2f} M parameters")
+        print(f"[train] AstrocyteX-Net v3.0: {n_params / 1e6:.2f} M parameters")
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     steps_per_epoch = int(np.ceil(samples / batch_size))
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=epochs * steps_per_epoch, pct_start=0.15)
@@ -205,7 +205,7 @@ def train(samples: int = 30000, epochs: int = 40, batch_size: int = 128, lr: flo
                     "params": n_params, "device": str(dev), "train_seconds": round(time.time() - t0, 1)})
     if verbose:
         print("[train] best validation (EMA):", {k: round(v, 4) if isinstance(v, float) else v for k, v in metrics.items()})
-    save_checkpoint(final, out_path, meta={"metrics": metrics, "data": "synthetic (environment-aware v2)", "seed": seed,
+    save_checkpoint(final, out_path, meta={"metrics": metrics, "data": "synthetic (environment-aware AstrocyteX v3.0)", "seed": seed,
                                            "history": history})
     if verbose:
         print(f"[train] saved -> {out_path}")
@@ -213,10 +213,10 @@ def train(samples: int = 30000, epochs: int = 40, batch_size: int = 128, lr: flo
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Train AstroGuard-X on simulated crew data")
-    ap.add_argument("--samples", type=int, default=30000)
+    ap = argparse.ArgumentParser(description="Train AstrocyteX-Net v3.0 on simulated crew data")
+    ap.add_argument("--samples", type=int, default=42000)
     ap.add_argument("--val-samples", type=int, default=None)
-    ap.add_argument("--epochs", type=int, default=40)
+    ap.add_argument("--epochs", type=int, default=50)
     ap.add_argument("--batch-size", type=int, default=128)
     ap.add_argument("--lr", type=float, default=2e-3)
     ap.add_argument("--seed", type=int, default=0)

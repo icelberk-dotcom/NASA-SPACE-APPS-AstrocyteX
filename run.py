@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 """
-AstroGuard-X launcher.
+AstrocyteX launcher.
 
-    python run.py ui         Astrocyte X · AstroGuard-X cosmic web UI + API    http://localhost:8501
-    python run.py streamlit  Classic Streamlit dashboard                       http://localhost:8502
-    python run.py api        FastAPI REST + web backend                        http://localhost:8000/docs
-    python run.py all     REST backend + dashboard talking to it
-    python run.py train   (re)train the risk model on simulated crews (GPU if available)
-    python run.py evaluate  held-out test (MCC, macro-F1, QWK, safety metrics) -> docs/MODEL_EVALUATION.md
-    python run.py test    run the unit tests
-    python run.py ecg     check the ECG-analyser integration
+    python run.py ui          AstrocyteX dark-purple Milky Way web console + API   http://localhost:8501
+    python run.py streamlit   AstrocyteX Streamlit telemetry console               http://localhost:8502
+    python run.py api         FastAPI REST + web backend                           http://localhost:8000/docs
+    python run.py all         REST backend + Streamlit console talking to it
+    python run.py train       (re)train AstrocyteX-Net v3.0 on simulated crews (GPU if available)
+    python run.py train-voice (re)train AstroVoiceNet v1.0 on acoustic/prosodic speech clips
+    python run.py evaluate    held-out test (MCC, macro-F1, QWK, safety metrics) -> docs/MODEL_EVALUATION.md
+    python run.py test        run the automated pytest suite
+    python run.py ecg         check the ECG-analyser integration
 """
 from __future__ import annotations
 
@@ -45,13 +46,17 @@ def main() -> int:
             api.terminate()
     if cmd == "train":
         return _run([PY, "-u", "-m", "models.train", *extra])
+    if cmd == "train-voice":
+        return _run([PY, "-u", "-m", "models.train_voice", *extra])
     if cmd == "evaluate":
         return _run([PY, "-u", "-m", "models.evaluate", *extra])
     if cmd == "test":
         return _run([PY, "-m", "pytest", "-q", *extra])
     if cmd == "ecg":
-        code = ("from backend.ecg_adapter import ECGAdapter; a=ECGAdapter(); print(a.status()); "
-                "r=a.sample('AFIB'); print(r.source, r.class_code, r.heart_rate, r.abnormal_probability_pct)")
+        code = (
+            "from backend.ecg_adapter import ECGAdapter; a=ECGAdapter(); print(a.status()); "
+            "r=a.sample('AFIB'); print(r.source, r.class_code, r.heart_rate, r.abnormal_probability_pct)"
+        )
         return _run([PY, "-c", code])
     print(__doc__)
     return 2

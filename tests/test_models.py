@@ -139,3 +139,31 @@ def test_untrained_model_equals_rule_score():
     z_now = torch.cat([b["seq"][:, -1], b["daily"]], dim=-1).numpy()
     rule = np.stack([risk_percent_array(p.key, p.ideal + z_now[:, j] * p.scale) for j, p in enumerate(PARAMETERS)], axis=1)
     assert np.abs(pred - rule).mean() < 8.0  # small perturbation from the freshly-initialised delta head
+
+
+def test_astrovoice_net_and_audio_feature_roundtrip():
+    """AstroVoiceNet processes log-Mel spectrograms + prosodic biomarkers with calibrated uncertainty."""
+    from models.voice_model import AstroVoiceNet, VoiceModelConfig
+    from utils.voice_synth import decode_audio_bytes, encode_wav_bytes, extract_voice_features, synthesize_astronaut_voice
+
+    wav, meta = synthesize_astronaut_voice("acute_stress", seed=77, duration_s=3.2, speaker_sex="female")
+    assert meta["state"] == "acute_stress" and wav.ndim == 1 and len(wav) == int(3.2 * 16000)
+    wav_bytes = encode_wav_bytes(wav, 16000)
+    wav_dec, sr_dec = decode_audio_bytes(wav_bytes, "checkin.wav")
+    assert sr_dec == 16000 and np.allclose(wav, wav_dec, atol=2e-4)
+
+    ext = extract_voice_features(wav_dec, sr_dec)
+    assert ext["features"].shape == (42,) and ext["mel_spec"].shape == (48, 64)
+
+    vnet = AstroVoiceNet(VoiceModelConfig(d_model=32, dropout=0.1))
+    feats_t = torch.from_numpy(np.stack([ext["features"], ext["features"]]))
+    spec_t = torch.from_numpy(np.stack([ext["mel_spec"], ext["mel_spec"]]))
+    out = vnet(feats_t, spec_t)
+    assert out["class_logits"].shape == (2, 5) and out["mood_logits"].shape == (2, 4) and out["risk_logit"].shape == (2,)
+    (out["class_logits"].mean() + out["mood_logits"].mean() + out["risk_logit"].mean()).backward()
+
+    pred = vnet.predict(ext["features"], ext["mel_spec"], n_mc=6)
+    assert pred["probs"].shape == (1, 5) and np.allclose(pred["probs"].sum(1), 1.0, atol=1e-4)
+    assert 0.0 <= float(pred["risk_pct"][0]) <= 100.0
+    assert float(pred["ci_low"][0]) <= float(pred["risk_pct"][0]) + 1e-4 <= float(pred["ci_high"][0]) + 2e-4
+

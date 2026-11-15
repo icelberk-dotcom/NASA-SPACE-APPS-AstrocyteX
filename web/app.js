@@ -1,68 +1,47 @@
 /* ==========================================================================
-   Astrocyte X · AstroGuard-X — Core SPA Engine (v2.0)
-   Starfield physics · Router · Live 43-param risk · FastAPI client · Charts
+   AstrocyteX — Flight Medical Telemetry Workstation Engine (v3.0)
+   English Interface · 43-Channel Multimodal Fusion · AstrocyteX-Voice Studio ·
+   Role-Adaptive Medical Advisor ('I am a doctor' / 'I am not a doctor')
    ========================================================================== */
 
 (() => {
   /* -----------------------------------------------------------------------
-     1. INTERACTIVE STARFIELD CANVAS (Mouse-repulsion + spring physics)
+     1. SUBTLE ATMOSPHERIC STARLIGHT LAYER
      ----------------------------------------------------------------------- */
   const starCanvas = document.getElementById("stars");
-  const sCtx = starCanvas.getContext("2d");
+  const sCtx = starCanvas ? starCanvas.getContext("2d") : null;
   let stars = [];
-  const mouse = { x: -9999, y: -9999 };
-  const MOUSE_RADIUS = 95;
-  const PUSH_STRENGTH = 0.85;
-  const SPRING = 0.04;
-  const FRICTION = 0.88;
 
   function createStars() {
+    if (!starCanvas) return;
     starCanvas.width = window.innerWidth;
     starCanvas.height = window.innerHeight;
-    const count = Math.floor((starCanvas.width * starCanvas.height) / 4800);
-    stars = Array.from({ length: count }, () => {
-      const x = Math.random() * starCanvas.width;
-      const y = Math.random() * starCanvas.height;
-      return {
-        x, y, homeX: x, homeY: y, vx: 0, vy: 0,
-        radius: Math.random() * 1.45 + 0.3,
-        alpha: Math.random(),
-        speed: Math.random() * 0.015 + 0.003,
-        direction: Math.random() < 0.5 ? 1 : -1,
-        hue: Math.random() < 0.25 ? "205, 225, 255" : "255, 255, 255",
-      };
-    });
+    const count = Math.floor((starCanvas.width * starCanvas.height) / 14000);
+    stars = Array.from({ length: count }, () => ({
+      x: Math.random() * starCanvas.width,
+      y: Math.random() * (starCanvas.height * 0.78),
+      radius: Math.random() * 0.9 + 0.25,
+      alpha: Math.random() * 0.5 + 0.12,
+      speed: Math.random() * 0.003 + 0.0008,
+      direction: Math.random() < 0.5 ? 1 : -1,
+    }));
   }
 
-  window.addEventListener("mousemove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
-  window.addEventListener("mouseout", () => { mouse.x = -9999; mouse.y = -9999; });
-  window.addEventListener("resize", () => { createStars(); redrawVisibleCanvases(); });
+  window.addEventListener("resize", () => {
+    createStars();
+    redrawVisibleCanvases();
+  });
 
   function animateStars() {
+    if (!sCtx || !starCanvas) return;
     sCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
     for (const s of stars) {
-      const dx = s.x - mouse.x;
-      const dy = s.y - mouse.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < MOUSE_RADIUS && dist > 0) {
-        const force = (1 - dist / MOUSE_RADIUS) * PUSH_STRENGTH;
-        s.vx += (dx / dist) * force;
-        s.vy += (dy / dist) * force;
-      }
-      s.vx += (s.homeX - s.x) * SPRING;
-      s.vy += (s.homeY - s.y) * SPRING;
-      s.vx *= FRICTION;
-      s.vy *= FRICTION;
-      s.x += s.vx;
-      s.y += s.vy;
-
       s.alpha += s.speed * s.direction;
-      if (s.alpha >= 1) { s.alpha = 1; s.direction = -1; }
-      if (s.alpha <= 0.16) { s.alpha = 0.16; s.direction = 1; }
-
+      if (s.alpha >= 0.65) { s.alpha = 0.65; s.direction = -1; }
+      if (s.alpha <= 0.10) { s.alpha = 0.10; s.direction = 1; }
       sCtx.beginPath();
       sCtx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-      sCtx.fillStyle = `rgba(${s.hue}, ${s.alpha})`;
+      sCtx.fillStyle = `rgba(238, 235, 248, ${s.alpha})`;
       sCtx.fill();
     }
     requestAnimationFrame(animateStars);
@@ -71,20 +50,25 @@
   animateStars();
 
   /* -----------------------------------------------------------------------
-     2. STATE & TRANSLATIONS
+     2. APPLICATION STATE & ENGLISH TERMINOLOGY
      ----------------------------------------------------------------------- */
-  let currentLang = localStorage.getItem("language") || "tr";
-  if (!window.TRANSLATIONS[currentLang]) currentLang = "tr";
+  const currentLang = "en";
+  localStorage.setItem("language", "en");
 
+  const savedRole = localStorage.getItem("astrocytex_user_role");
   const state = {
     astronautId: "astro-1",
     missionDay: 90,
     profile: "iss_leo",
     scenario: "nominal",
+    userRole: savedRole === "doctor" ? "doctor" : "non_doctor",
     subjectiveLog: "",
     values: {},
     sensorSeries: null,
     ecgResult: null,
+    voiceResult: null,
+    voiceSex: "female",
+    voiceActiveSample: "calm_regulated",
     registry: [],
     paramByKey: {},
     categories: {},
@@ -101,43 +85,52 @@
   };
 
   function t(key) {
-    return (window.TRANSLATIONS[currentLang] && window.TRANSLATIONS[currentLang][key])
-      || window.TRANSLATIONS.en[key]
-      || key;
+    return (window.TRANSLATIONS.en && window.TRANSLATIONS.en[key]) || key;
   }
   window.agTranslate = t;
 
   function apiLang() {
-    return currentLang === "tr" ? "tr" : "en";
+    return "en";
   }
 
   function paramLabel(p) {
-    return currentLang === "tr" && p.name_tr ? p.name_tr : p.name;
+    return p.name || p.key;
   }
 
-  function catLabel(catObj) {
-    if (!catObj) return "";
-    return currentLang === "tr" && catObj.tr ? catObj.tr : catObj.en;
+  function formatScenarioTitle(raw) {
+    return String(raw || "")
+      .split("_")
+      .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : ""))
+      .join(" ");
   }
 
   function showToast(msg) {
     const box = document.getElementById("toastContainer");
+    if (!box) return;
     const el = document.createElement("div");
     el.className = "toast";
     el.textContent = msg;
     box.appendChild(el);
-    setTimeout(() => el.remove(), 3400);
+    setTimeout(() => el.remove(), 3200);
   }
 
   /* -----------------------------------------------------------------------
-     3. PIECEWISE-LINEAR LIVE RISK ENGINE (Exact match to reference_ranges.py)
+     3. PIECEWISE-LINEAR LIVE RISK ENGINE
      ----------------------------------------------------------------------- */
   const LEVEL_COLORS = {
-    gray: "#9aa0a6",
-    green: "#2ecc71",
-    yellow: "#f1c40f",
-    red: "#e74c3c",
-    black: "#ffffff",
+    gray: "#7c7a8c",
+    green: "#29b377",
+    yellow: "#df9f15",
+    red: "#e5484d",
+    black: "#f8fafc",
+  };
+
+  const LEVEL_NAMES = {
+    gray: "Baseline",
+    green: "Nominal",
+    yellow: "Elevated",
+    red: "High Risk",
+    black: "Critical",
   };
 
   function riskLevel(pct) {
@@ -188,10 +181,10 @@
   function normalRangeText(p) {
     const lo = p.normal[0], hi = p.normal[1];
     const u = p.unit ? ` ${p.unit}` : "";
-    if (lo !== null && hi !== null) return `${lo} – ${hi}${u}`;
-    if (lo !== null) return `≥ ${lo}${u}`;
-    if (hi !== null) return `≤ ${hi}${u}`;
-    return "—";
+    if (lo !== null && hi !== null) return `${lo} - ${hi}${u}`;
+    if (lo !== null) return `>= ${lo}${u}`;
+    if (hi !== null) return `<= ${hi}${u}`;
+    return "-";
   }
 
   window.agDotHtml = (key, val) => {
@@ -208,117 +201,108 @@
   };
 
   /* -----------------------------------------------------------------------
-     4. MENU, ROUTING & LANGUAGE SELECTOR
+     4. SIDEBAR NAVIGATION & ROLE SELECTOR
      ----------------------------------------------------------------------- */
-  const menu = document.getElementById("menu");
-  const menuButton = document.getElementById("menuButton");
+  const sidebar = document.getElementById("sidebar");
+  const mobileNavBtn = document.getElementById("mobileNavBtn");
+  const topbarSectionTitle = document.getElementById("topbarSectionTitle");
   const menuItems = document.querySelectorAll(".menu-list button[data-page]");
 
-  function setMenuOpen(open) {
-    menu.classList.toggle("open", open);
-    menuButton.setAttribute("aria-expanded", String(open));
-  }
+  const PAGE_TITLES = {
+    home: "Overview",
+    "overall-health": "Health Matrix (43)",
+    "mental-health": "Voice & Mood",
+    "cardiovascular-statistics": "Cardiovascular & ECG",
+    "biochemical-statistics": "Biochemistry & CBC",
+    "space-radiation": "Space Environment",
+    "exercise-tracker": "Exercise & Physiology",
+    diet: "Nutrition & Hydration",
+    "diet-history": "Nutrition Log",
+    experiments: "Experiments",
+    progress: "Trends & Advisor",
+    rewards: "Countermeasures",
+  };
 
   function showPage(pageId) {
     const id = pageId || "home";
     document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
     const target = document.getElementById(id) || document.getElementById("home");
+    const resolvedId = target.id;
     target.classList.add("active");
 
-    menuItems.forEach((btn) => btn.classList.toggle("current", btn.dataset.page === id));
-    document.querySelectorAll(".menu-group").forEach((group) => {
-      const parentBtn = group.querySelector(":scope > button");
-      const inside = parentBtn.dataset.page === id || group.querySelector(`.submenu button[data-page="${id}"]`);
-      if (inside) {
-        group.classList.add("expanded");
-        parentBtn.setAttribute("aria-expanded", "true");
-      }
-    });
-    setTimeout(redrawVisibleCanvases, 40);
+    menuItems.forEach((btn) => btn.classList.toggle("current", btn.dataset.page === resolvedId));
+    if (topbarSectionTitle) {
+      topbarSectionTitle.textContent = PAGE_TITLES[resolvedId] || "Overview";
+    }
+    if (sidebar) sidebar.classList.remove("open");
+    setTimeout(redrawVisibleCanvases, 35);
   }
   window.agShowPage = showPage;
 
-  menuButton.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setLangOpen(false);
-    setMenuOpen(!menu.classList.contains("open"));
-  });
-
   menuItems.forEach((item) => {
     item.addEventListener("click", () => {
-      const group = item.closest(".menu-group");
-      const isGroupTab = group && item === group.querySelector(":scope > button");
-      const wasExpanded = isGroupTab && group.classList.contains("expanded");
       showPage(item.dataset.page);
       history.replaceState(null, "", "#" + item.dataset.page);
-      if (isGroupTab) {
-        group.classList.toggle("expanded", !wasExpanded);
-        item.setAttribute("aria-expanded", String(!wasExpanded));
-        return;
-      }
-      setMenuOpen(false);
     });
   });
 
-  const langBox = document.getElementById("lang");
-  const langButton = document.getElementById("langButton");
-  const langList = document.getElementById("langList");
+  document.querySelectorAll("[data-nav-target]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const dest = btn.dataset.navTarget;
+      showPage(dest);
+      history.replaceState(null, "", "#" + dest);
+    });
+  });
 
-  function setLangOpen(open) {
-    langBox.classList.toggle("open", open);
-    langButton.setAttribute("aria-expanded", String(open));
+  if (mobileNavBtn && sidebar) {
+    mobileNavBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      sidebar.classList.toggle("open");
+    });
+    document.addEventListener("click", (e) => {
+      if (sidebar.classList.contains("open") && !sidebar.contains(e.target) && e.target !== mobileNavBtn) {
+        sidebar.classList.remove("open");
+      }
+    });
   }
 
-  function applyLanguage(code) {
-    if (!window.TRANSLATIONS[code]) code = "en";
-    currentLang = code;
-    document.documentElement.lang = code;
+  function syncRoleUI() {
+    document.querySelectorAll("[data-role-btn]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.roleBtn === state.userRole);
+    });
+    const desc = state.userRole === "doctor" ? t("roleDescDoctor") : t("roleDescNonDoctor");
+    const h1 = document.getElementById("briefingRoleHint");
+    const h2 = document.getElementById("chatRoleHint");
+    if (h1) h1.textContent = desc;
+    if (h2) h2.textContent = desc;
+  }
 
+  function setUserRole(role, notify = true) {
+    state.userRole = role === "doctor" ? "doctor" : "non_doctor";
+    localStorage.setItem("astrocytex_user_role", state.userRole);
+    syncRoleUI();
+    renderVoiceStudio();
+    if (notify) {
+      const msg = state.userRole === "doctor" ? t("roleDescDoctor") : t("roleDescNonDoctor");
+      showToast(msg);
+      appendSystemChatNotice(msg);
+      runAssessment(true);
+    }
+  }
+
+  function applyStaticTranslations() {
+    document.documentElement.lang = "en";
     document.querySelectorAll("[data-i18n]").forEach((el) => {
-      const txt = window.TRANSLATIONS[code][el.dataset.i18n];
+      const txt = window.TRANSLATIONS.en[el.dataset.i18n];
       if (txt) el.textContent = txt;
     });
     document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-      const txt = window.TRANSLATIONS[code][el.dataset.i18nPlaceholder];
+      const txt = window.TRANSLATIONS.en[el.dataset.i18nPlaceholder];
       if (txt) el.placeholder = txt;
     });
-
-    langList.querySelectorAll("button").forEach((b) =>
-      b.classList.toggle("current", b.dataset.lang === code)
-    );
-    localStorage.setItem("language", code);
-    renderAllScreens();
+    syncRoleUI();
     document.dispatchEvent(new CustomEvent("app-language-changed"));
   }
-
-  window.LANGUAGES.forEach(({ code, name }) => {
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.dataset.lang = code;
-    btn.textContent = name;
-    btn.addEventListener("click", () => {
-      applyLanguage(code);
-      setLangOpen(false);
-      runAssessment(true);
-    });
-    li.appendChild(btn);
-    langList.appendChild(li);
-  });
-
-  langButton.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setMenuOpen(false);
-    setLangOpen(!langBox.classList.contains("open"));
-  });
-
-  document.addEventListener("click", (e) => {
-    if (!menu.contains(e.target)) setMenuOpen(false);
-    if (!langBox.contains(e.target)) setLangOpen(false);
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { setMenuOpen(false); setLangOpen(false); }
-  });
 
   /* -----------------------------------------------------------------------
      5. PARAMETER INPUT CARD RENDERER
@@ -398,7 +382,7 @@
           <input type="number" class="param-num" min="${p.bounds[0]}" max="${p.bounds[1]}" step="${step}" value="${val}">
         </div>
         <div class="param-foot">
-          <span>${t("normalCol")}: ${normalRangeText(p)}</span>
+          <span>Ref: ${normalRangeText(p)}</span>
           <span>${p.unit || ""}</span>
         </div>
       `;
@@ -411,29 +395,25 @@
   }
 
   /* -----------------------------------------------------------------------
-     6. SVG GAUGE & HIGH-DPI CANVAS CHARTS
+     6. PRECISION LINEAR METER & HIGH-DPI CANVAS CHARTS
      ----------------------------------------------------------------------- */
-  function svgRingGauge(pct, level, subtitleHtml) {
-    const col = level === "black" ? "#ff5252" : (LEVEL_COLORS[level] || "#6ea8ff");
-    const r = 46;
-    const circ = 2 * Math.PI * r;
-    const dash = (Math.max(0, Math.min(100, pct || 0)) / 100) * circ;
+  function linearMeterHtml(pct, level, subtitleHtml) {
+    const safePct = Math.max(0, Math.min(100, Number(pct) || 0));
+    const col = level === "black" ? "#e5484d" : (LEVEL_COLORS[level] || "#9b87f5");
+    const bandLabel = LEVEL_NAMES[level] || "Baseline";
     return `
-      <div class="gauge-wrap">
-        <svg width="114" height="114" viewBox="0 0 114 114" style="flex-shrink:0;">
-          <circle cx="57" cy="57" r="${r}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="10"/>
-          <circle cx="57" cy="57" r="${r}" fill="none" stroke="${col}" stroke-width="10"
-            stroke-linecap="round" stroke-dasharray="${dash.toFixed(1)} ${circ.toFixed(1)}"
-            transform="rotate(-90 57 57)" style="filter:drop-shadow(0 0 8px ${col});transition:stroke-dasharray 0.5s ease;"/>
-          <text x="57" y="63" text-anchor="middle" fill="#fff" font-size="20" font-weight="800">${(pct || 0).toFixed(0)}%</text>
-        </svg>
-        <div class="gauge-meta">
-          <div style="display:flex;align-items:center;gap:9px;">
+      <div class="meter-wrap">
+        <div class="meter-readout-row">
+          <div style="display:flex;align-items:center;gap:8px;">
             <span class="risk-dot lg ${level}"></span>
-            <span class="gauge-big">${(pct || 0).toFixed(1)}%</span>
+            <span class="meter-big">${safePct.toFixed(1)}%</span>
           </div>
-          <div class="gauge-sub">${subtitleHtml}</div>
+          <span class="meter-band">${bandLabel}</span>
         </div>
+        <div class="meter-track">
+          <div class="meter-fill" style="width:${Math.max(2, safePct).toFixed(1)}%;background:${col};"></div>
+        </div>
+        <div class="meter-sub">${subtitleHtml}</div>
       </div>
     `;
   }
@@ -456,14 +436,13 @@
     const box = setupCanvas(canvas, Number(canvas?.getAttribute("height")) || 210);
     if (!box) return;
     const { c, w, h } = box;
-    const pad = { l: 44, r: 18, t: 24, b: 28 };
+    const pad = { l: 42, r: 16, t: 24, b: 26 };
     const pw = w - pad.l - pad.r;
     const ph = h - pad.t - pad.b;
 
-    // Grid lines
-    c.strokeStyle = "rgba(175, 205, 255, 0.12)";
-    c.fillStyle = "rgba(205, 222, 255, 0.68)";
-    c.font = "11px Segoe UI, sans-serif";
+    c.strokeStyle = "rgba(255, 255, 255, 0.07)";
+    c.fillStyle = "rgba(158, 155, 174, 0.78)";
+    c.font = "11px Consolas, monospace";
     for (let i = 0; i <= 4; i++) {
       const y = pad.t + (ph * i) / 4;
       const val = yMax - ((yMax - yMin) * i) / 4;
@@ -479,12 +458,11 @@
       }
     }
 
-    // Legend + curves
     let lx = pad.l;
     seriesList.forEach(({ label, data, color }) => {
       if (!data || !data.length) return;
       c.strokeStyle = color;
-      c.lineWidth = 2.2;
+      c.lineWidth = 1.75;
       c.beginPath();
       data.forEach((v, idx) => {
         const x = pad.l + (pw * idx) / Math.max(1, data.length - 1);
@@ -494,21 +472,20 @@
       c.stroke();
 
       c.fillStyle = color;
-      c.fillRect(lx, 7, 12, 4);
-      c.fillStyle = "#e6f0ff";
-      c.fillText(label, lx + 16, 13);
-      lx += c.measureText(label).width + 34;
+      c.fillRect(lx, 8, 10, 2.5);
+      c.fillStyle = "#efeff4";
+      c.fillText(label, lx + 14, 13);
+      lx += c.measureText(label).width + 30;
     });
   }
 
   function drawECGCanvas() {
     const canvas = document.getElementById("ecgCanvas");
-    const box = setupCanvas(canvas, 270);
+    const box = setupCanvas(canvas, 265);
     if (!box) return;
     const { c, w, h } = box;
 
-    // Medical ECG grid
-    c.strokeStyle = "rgba(255, 110, 130, 0.11)";
+    c.strokeStyle = "rgba(255, 255, 255, 0.045)";
     c.lineWidth = 1;
     for (let x = 0; x < w; x += 16) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
     for (let y = 0; y < h; y += 16) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
@@ -516,32 +493,31 @@
     const ecg = state.ecgResult;
     const arr = (ecg && Array.isArray(ecg.lead_ii) && ecg.lead_ii.length) ? ecg.lead_ii : null;
     if (!arr) {
-      c.fillStyle = "rgba(215, 230, 255, 0.65)";
-      c.font = "13px Segoe UI, sans-serif";
-      c.fillText("Select a clinical demo class above (e.g. AFIB, NORMAL, MI, PVC) or upload a 12-lead ECG file.", 24, h / 2);
+      c.fillStyle = "rgba(158, 155, 174, 0.78)";
+      c.font = "12px Inter, Segoe UI, sans-serif";
+      c.fillText("Select an ECG rhythm class above (NORMAL, AFIB, MI, PVC) or upload a 12-lead file.", 20, h / 2);
       return;
     }
 
-    // Top-half: Full Lead II diagnostic rhythm strip, Bottom-half: Zoomed QRS morphology beat window
     const strips = [
-      { title: `Lead II — Full Rhythm Strip (${ecg.record_name || ecg.class_code})`, data: arr },
-      { title: `Lead II — High-Resolution QRS-T Morphology Zoom`, data: arr.slice(0, Math.min(320, arr.length)) },
+      { title: `Lead II — Rhythm Strip (${ecg.record_name || ecg.class_code})`, data: arr },
+      { title: `Lead II — QRS-T Segment Detail`, data: arr.slice(0, Math.min(320, arr.length)) },
     ];
     const cellH = h / 2;
     strips.forEach((st, idx) => {
-      const x0 = 16;
+      const x0 = 14;
       const y0 = idx * cellH + 8;
-      const cw = w - 32;
+      const cw = w - 28;
       const ch = cellH - 18;
       const mn = Math.min(...st.data), mx = Math.max(...st.data);
       const span = Math.max(0.2, mx - mn);
 
-      c.fillStyle = "#9ec5ff";
-      c.font = "bold 11.5px Consolas, monospace";
-      c.fillText(st.title, x0 + 4, y0 + 13);
+      c.fillStyle = "#9e9bae";
+      c.font = "600 11px Consolas, monospace";
+      c.fillText(st.title, x0 + 2, y0 + 12);
 
-      c.strokeStyle = idx === 0 ? "#4df0a8" : "#6ec6ff";
-      c.lineWidth = 1.75;
+      c.strokeStyle = idx === 0 ? "#b4a5fa" : "#29b377";
+      c.lineWidth = 1.5;
       c.beginPath();
       st.data.forEach((v, i) => {
         const x = x0 + (cw * i) / Math.max(1, st.data.length - 1);
@@ -550,6 +526,72 @@
       });
       c.stroke();
     });
+  }
+
+  function drawVoiceCanvas() {
+    const canvas = document.getElementById("voiceCanvas");
+    const box = setupCanvas(canvas, 215);
+    if (!box) return;
+    const { c, w, h } = box;
+
+    const vr = state.voiceResult;
+    if (!vr || !Array.isArray(vr.waveform_preview) || !vr.waveform_preview.length) {
+      c.fillStyle = "rgba(158, 155, 174, 0.78)";
+      c.font = "12px Inter, Segoe UI, sans-serif";
+      c.fillText("Record microphone audio, upload a speech clip, or select a reference sample above.", 18, h / 2);
+      return;
+    }
+
+    const topH = Math.floor(h * 0.44);
+    const botY = topH + 10;
+    const botH = h - botY - 8;
+    const padX = 14;
+    const innerW = w - padX * 2;
+
+    c.fillStyle = "#9e9bae";
+    c.font = "600 10.5px Consolas, monospace";
+    c.fillText(`Acoustic Waveform (${(vr.duration_s || 0).toFixed(1)}s · 16 kHz)`, padX, 14);
+
+    c.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    c.beginPath();
+    c.moveTo(padX, 18 + (topH - 20) / 2);
+    c.lineTo(w - padX, 18 + (topH - 20) / 2);
+    c.stroke();
+
+    const wf = vr.waveform_preview;
+    c.strokeStyle = "#b4a5fa";
+    c.lineWidth = 1.25;
+    c.beginPath();
+    wf.forEach((v, i) => {
+      const x = padX + (innerW * i) / Math.max(1, wf.length - 1);
+      const y = 18 + (topH - 20) * (0.5 - 0.46 * Math.max(-1, Math.min(1, v)));
+      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    });
+    c.stroke();
+
+    c.fillStyle = "#9e9bae";
+    c.fillText("48-Band Log-Mel Spectrogram", padX, botY + 8);
+    const spec = vr.mel_spectrogram_preview;
+    if (Array.isArray(spec) && spec.length) {
+      const nMels = spec.length;
+      const nFrames = spec[0].length || 1;
+      const sy0 = botY + 13;
+      const sh = botH - 13;
+      const cellW = innerW / nFrames;
+      const cellH = sh / nMels;
+      for (let m = 0; m < nMels; m++) {
+        const row = spec[nMels - 1 - m];
+        for (let tIdx = 0; tIdx < nFrames; tIdx++) {
+          const z = Number(row[tIdx] || 0);
+          const norm = Math.max(0, Math.min(1, (z + 2.2) / 4.4));
+          const rCol = Math.round(12 + 184 * Math.pow(norm, 1.35));
+          const gCol = Math.round(7 + 108 * Math.pow(norm, 1.8));
+          const bCol = Math.round(24 + 205 * Math.pow(norm, 0.85));
+          c.fillStyle = `rgb(${rCol},${gCol},${bCol})`;
+          c.fillRect(padX + tIdx * cellW, sy0 + m * cellH, Math.ceil(cellW), Math.ceil(cellH));
+        }
+      }
+    }
   }
 
   function fmtCommDelay(der) {
@@ -567,14 +609,15 @@
   function redrawVisibleCanvases() {
     if (state.sensorSeries) {
       drawLineSeries("telemetryCanvas", [
-        { label: "HR (bpm)", data: state.sensorSeries.heart_rate, color: "#ff6b81" },
-        { label: "SpO₂ (%)", data: state.sensorSeries.spo2, color: "#4de1ff" },
-        { label: "Sys BP", data: state.sensorSeries.systolic_bp, color: "#ffd54f" },
-        { label: "Resp×4", data: (state.sensorSeries.resp_rate || []).map((x) => x * 4), color: "#69f0ae" },
+        { label: "HR (bpm)", data: state.sensorSeries.heart_rate, color: "#e5484d" },
+        { label: "SpO2 (%)", data: state.sensorSeries.spo2, color: "#b4a5fa" },
+        { label: "Sys BP", data: state.sensorSeries.systolic_bp, color: "#df9f15" },
+        { label: "Resp x4", data: (state.sensorSeries.resp_rate || []).map((x) => x * 4), color: "#29b377" },
       ], Array.from({ length: 96 }, (_, i) => `${Math.round((i - 95) * 15 / 60)}h`), 30, 185);
     }
 
     drawECGCanvas();
+    drawVoiceCanvas();
 
     const A = state.assessment;
     if (A && A.physics && A.physics.projections) {
@@ -583,34 +626,342 @@
       const p90 = A.physics.projections["+90d"] || {};
       const p180 = A.physics.projections["+180d"] || {};
       drawLineSeries("odeCanvas", [
-        { label: "Bone BMD Δ%", data: [cur.bone_density_change_pct || 0, p30.bone_density_change_pct || 0, p90.bone_density_change_pct || 0, p180.bone_density_change_pct || 0], color: "#ffd54f" },
-        { label: "Muscle Mass Δ%", data: [cur.muscle_mass_change_pct || 0, p30.muscle_mass_change_pct || 0, p90.muscle_mass_change_pct || 0, p180.muscle_mass_change_pct || 0], color: "#ff7a7a" },
-        { label: "Plasma Vol Δ%", data: [cur.plasma_volume_change_pct || 0, p30.plasma_volume_change_pct || 0, p90.plasma_volume_change_pct || 0, p180.plasma_volume_change_pct || 0], color: "#6ea8ff" },
+        { label: "Bone BMD %", data: [cur.bone_density_change_pct || 0, p30.bone_density_change_pct || 0, p90.bone_density_change_pct || 0, p180.bone_density_change_pct || 0], color: "#df9f15" },
+        { label: "Muscle Mass %", data: [cur.muscle_mass_change_pct || 0, p30.muscle_mass_change_pct || 0, p90.muscle_mass_change_pct || 0, p180.muscle_mass_change_pct || 0], color: "#e5484d" },
+        { label: "Plasma Vol %", data: [cur.plasma_volume_change_pct || 0, p30.plasma_volume_change_pct || 0, p90.plasma_volume_change_pct || 0, p180.plasma_volume_change_pct || 0], color: "#b4a5fa" },
       ], ["Now", "+30d", "+90d", "+180d"], -22, 6);
     }
 
     if (A && A.forecast && A.forecast.length) {
       drawLineSeries("forecastCanvas", [
-        { label: "TFT 7-Day Risk %", data: A.forecast, color: "#8ab4ff" },
+        { label: "7-Day Forecast %", data: A.forecast, color: "#b4a5fa" },
       ], A.forecast.map((_, i) => `D+${i + 1}`), 0, 100);
     }
 
     if (state.history && state.history.length) {
       const pts = state.history;
       drawLineSeries("historyCanvas", [
-        { label: "Overall Health Risk %", data: pts.map((x) => x.overall_risk_pct ?? x.overall_risk ?? 0), color: "#4df0a8" },
+        { label: "Health Risk %", data: pts.map((x) => x.overall_risk_pct ?? x.overall_risk ?? 0), color: "#29b377" },
       ], pts.map((_, i) => `#${i + 1}`), 0, 100);
     }
   }
 
   /* -----------------------------------------------------------------------
-     7. RENDER ALL SCREENS
+     7. VOICE ACOUSTIC RECORDER (16 kHz PCM WAV) & UPLOAD DECODER
+     ----------------------------------------------------------------------- */
+  let mediaStream = null;
+  let audioCtx = null;
+  let scriptNode = null;
+  let recordedChunks = [];
+  let isRecording = false;
+  let recTimerId = null;
+  let recStartMs = 0;
+
+  function resampleFloat32(samples, srcRate, dstRate) {
+    if (srcRate === dstRate) return samples;
+    const outLen = Math.max(1, Math.round((samples.length * dstRate) / srcRate));
+    const out = new Float32Array(outLen);
+    const ratio = (samples.length - 1) / Math.max(1, outLen - 1);
+    for (let i = 0; i < outLen; i++) {
+      const pos = i * ratio;
+      const idx = Math.floor(pos);
+      const frac = pos - idx;
+      const a = samples[idx] || 0;
+      const b = samples[Math.min(samples.length - 1, idx + 1)] || 0;
+      out[i] = a + frac * (b - a);
+    }
+    return out;
+  }
+
+  function encodeWav16k(floatSamples, sampleRate = 16000) {
+    const pcm16 = new Int16Array(floatSamples.length);
+    for (let i = 0; i < floatSamples.length; i++) {
+      const s = Math.max(-1, Math.min(1, floatSamples[i]));
+      pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    const byteLen = pcm16.length * 2;
+    const buf = new ArrayBuffer(44 + byteLen);
+    const view = new DataView(buf);
+    const writeStr = (off, str) => {
+      for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
+    };
+    writeStr(0, "RIFF");
+    view.setUint32(4, 36 + byteLen, true);
+    writeStr(8, "WAVE");
+    writeStr(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, "data");
+    view.setUint32(40, byteLen, true);
+    let offset = 44;
+    for (let i = 0; i < pcm16.length; i++, offset += 2) {
+      view.setInt16(offset, pcm16[i], true);
+    }
+    return new Blob([buf], { type: "audio/wav" });
+  }
+
+  async function toggleVoiceRecording() {
+    const recBtn = document.getElementById("voiceRecordBtn");
+    const recLbl = document.getElementById("voiceRecordBtnLabel");
+    const timerEl = document.getElementById("voiceRecTimer");
+
+    if (!isRecording) {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new Ctx();
+        const source = audioCtx.createMediaStreamSource(mediaStream);
+        scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+        recordedChunks = [];
+        scriptNode.onaudioprocess = (ev) => {
+          if (!isRecording) return;
+          const ch = ev.inputBuffer.getChannelData(0);
+          recordedChunks.push(new Float32Array(ch));
+        };
+        source.connect(scriptNode);
+        scriptNode.connect(audioCtx.destination);
+        isRecording = true;
+        recStartMs = Date.now();
+        recBtn.classList.add("recording");
+        recLbl.textContent = t("recStop");
+        timerEl.hidden = false;
+        timerEl.textContent = "00:00";
+        recTimerId = setInterval(() => {
+          const sec = Math.floor((Date.now() - recStartMs) / 1000);
+          const mm = String(Math.floor(sec / 60)).padStart(2, "0");
+          const ss = String(sec % 60).padStart(2, "0");
+          timerEl.textContent = `${mm}:${ss}`;
+          if (sec >= 18) toggleVoiceRecording();
+        }, 250);
+      } catch (err) {
+        showToast("Microphone unavailable: " + err.message);
+      }
+    } else {
+      isRecording = false;
+      clearInterval(recTimerId);
+      recBtn.classList.remove("recording");
+      recLbl.textContent = t("recStart");
+      timerEl.hidden = true;
+
+      const srcRate = audioCtx ? audioCtx.sampleRate : 44100;
+      if (scriptNode) { try { scriptNode.disconnect(); } catch {} scriptNode = null; }
+      if (audioCtx) { try { await audioCtx.close(); } catch {} audioCtx = null; }
+      if (mediaStream) { mediaStream.getTracks().forEach((tr) => tr.stop()); mediaStream = null; }
+
+      const totalLen = recordedChunks.reduce((s, a) => s + a.length, 0);
+      if (totalLen < srcRate * 0.4) {
+        showToast("Recording too short (speak for at least 1-2 seconds).");
+        return;
+      }
+      const merged = new Float32Array(totalLen);
+      let off = 0;
+      for (const ch of recordedChunks) { merged.set(ch, off); off += ch.length; }
+      const wav16 = encodeWav16k(resampleFloat32(merged, srcRate, 16000), 16000);
+
+      const player = document.getElementById("voiceAudioPlayer");
+      if (player) player.src = URL.createObjectURL(wav16);
+
+      await uploadVoiceBlob(wav16, "live_voice_recording.wav");
+    }
+  }
+
+  async function handleVoiceFileUpload(file) {
+    if (!file) return;
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith(".npy") || lower.endsWith(".csv")) {
+      await uploadVoiceBlob(file, file.name);
+      return;
+    }
+    try {
+      const arrBuf = await file.arrayBuffer();
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const tmpCtx = new Ctx();
+      const decoded = await tmpCtx.decodeAudioData(arrBuf.slice(0));
+      const ch0 = decoded.getChannelData(0);
+      const mono = new Float32Array(ch0.length);
+      if (decoded.numberOfChannels > 1) {
+        const ch1 = decoded.getChannelData(1);
+        for (let i = 0; i < ch0.length; i++) mono[i] = 0.5 * (ch0[i] + ch1[i]);
+      } else {
+        mono.set(ch0);
+      }
+      const resampled = resampleFloat32(mono, decoded.sampleRate, 16000);
+      await tmpCtx.close();
+      const wavBlob = encodeWav16k(resampled, 16000);
+      const player = document.getElementById("voiceAudioPlayer");
+      if (player) player.src = URL.createObjectURL(wavBlob);
+      await uploadVoiceBlob(wavBlob, file.name.replace(/\.[^.]+$/, "") + ".wav");
+    } catch {
+      const player = document.getElementById("voiceAudioPlayer");
+      if (player) player.src = URL.createObjectURL(file);
+      await uploadVoiceBlob(file, file.name);
+    }
+  }
+
+  async function uploadVoiceBlob(blob, filename) {
+    const fd = new FormData();
+    fd.append("file", blob, filename);
+    const res = await fetch(`/voice/analyze?lang=en&role=${state.userRole}`, {
+      method: "POST",
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      showToast("Voice analysis error: " + (err.detail || res.status));
+      return;
+    }
+    state.voiceResult = await res.json();
+    renderVoiceStudio();
+    renderHUD();
+    renderHome();
+    drawVoiceCanvas();
+    await runAssessment(true);
+    showToast(`${t("voiceSynced")} (${state.voiceResult.voice_risk_pct.toFixed(1)}%)`);
+  }
+
+  async function loadVoiceSample(stateName, autoSync = false) {
+    state.voiceActiveSample = stateName;
+    document.querySelectorAll("#voiceSampleBtns .chip-btn").forEach((b) =>
+      b.classList.toggle("active", b.dataset.vsample === stateName)
+    );
+    const res = await fetch(
+      `/voice/sample/${encodeURIComponent(stateName)}?sex=${state.voiceSex}&lang=en&role=${state.userRole}`
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    state.voiceResult = data;
+    if (data.audio_wav_base64) {
+      const player = document.getElementById("voiceAudioPlayer");
+      if (player) player.src = `data:audio/wav;base64,${data.audio_wav_base64}`;
+    }
+    renderVoiceStudio();
+    renderHUD();
+    renderHome();
+    drawVoiceCanvas();
+    if (autoSync) {
+      await runAssessment(true);
+      showToast(`${t("voiceSynced")} (${data.voice_risk_pct.toFixed(1)}%)`);
+    }
+  }
+
+  function renderVoiceStudio() {
+    const vr = state.voiceResult;
+    const gaugeCard = document.getElementById("voiceRiskGaugeCard");
+    const moodCard = document.getElementById("voiceMoodAndStateCard");
+    const bmGrid = document.getElementById("voiceBiomarkersGrid");
+    const metaLbl = document.getElementById("voiceClipMetaLabel");
+    if (!gaugeCard || !moodCard || !bmGrid) return;
+
+    if (!vr) {
+      gaugeCard.innerHTML = `<p class="dim-note">Initializing voice acoustic telemetry...</p>`;
+      moodCard.innerHTML = "";
+      bmGrid.innerHTML = "";
+      return;
+    }
+
+    if (metaLbl) {
+      metaLbl.textContent = `${vr.record_name || "voice.wav"} · ${(vr.duration_s || 0).toFixed(1)}s · 16.0 kHz`;
+    }
+
+    const stTitle = vr.state_en || vr.state_key;
+    const roleNote = state.userRole === "doctor" ? vr.clinical_note_en : vr.simple_note_en;
+
+    gaugeCard.innerHTML = `
+      <h3 class="card-title">
+        <span>${t("voiceRiskLabel")}</span>
+        <span class="status-chip">${vr.model_version || vr.source}</span>
+      </h3>
+      ${linearMeterHtml(
+        vr.voice_risk_pct,
+        vr.level,
+        `<div><strong>${stTitle}</strong> (${(vr.confidence_pct || 0).toFixed(1)}% confidence)</div>
+         <div class="mono-meta" style="margin-top:3px;">
+           90% CI: ${vr.ci_low}% - ${vr.ci_high}% · Epistemic +/-${vr.epistemic_pct}%
+         </div>`
+      )}
+      <div style="margin-top:12px;padding:9px 11px;background:rgba(255,255,255,0.025);border:1px solid var(--border);border-radius:3px;font-size:12px;line-height:1.5;color:var(--text-dim);">
+        <div class="mono-meta" style="margin-bottom:3px;text-transform:uppercase;">
+          ${state.userRole === "doctor" ? "Clinical Interpretation" : "Plain Summary"}
+        </div>
+        ${roleNote || ""}
+      </div>
+      <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+        <button type="button" class="btn primary small" id="applyVoiceToAIBtn">${t("applyVoiceBtn")}</button>
+      </div>
+    `;
+    const applyBtn = document.getElementById("applyVoiceToAIBtn");
+    if (applyBtn) {
+      applyBtn.addEventListener("click", () => runAssessment(false));
+    }
+
+    const mood = vr.mood || {};
+    const moodItems = [
+      ["Affective Valence", mood.valence_pct || 0, "#29b377"],
+      ["Autonomic Arousal", mood.arousal_pct || 0, "#9b87f5"],
+      ["Vocal Stress Load", mood.stress_pct || 0, "#e5484d"],
+      ["Cognitive Fatigue", mood.fatigue_pct || 0, "#df9f15"],
+    ];
+
+    const probs = (vr.probabilities || []).slice(0, 5);
+    moodCard.innerHTML = `
+      <h3 class="card-title"><span>${t("voiceMoodTitle")}</span></h3>
+      <div>
+        ${moodItems.map(([lbl, val, col]) => `
+          <div class="voice-mood-row">
+            <div class="voice-mood-head"><span>${lbl}</span><b>${Number(val).toFixed(1)}%</b></div>
+            <div class="mini-bar"><span style="width:${Math.max(2, Math.min(100, val))}%;background:${col}"></span></div>
+          </div>
+        `).join("")}
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;">
+      <div class="sub-label">${t("voiceStateProbs")}</div>
+      <div>
+        ${probs.map((p) => `
+          <div class="voice-mood-row" style="margin-bottom:5px;">
+            <div class="voice-mood-head"><span>${p.name_en}</span><b>${Number(p.pct).toFixed(1)}%</b></div>
+            <div class="mini-bar"><span style="width:${Math.max(2, Math.min(100, p.pct))}%;background:#9b87f5"></span></div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+
+    const bm = vr.biomarkers || {};
+    const bmCells = [
+      ["F0 Pitch Mean", `${(bm.f0_mean_hz || 0).toFixed(1)} Hz`],
+      ["F0 Variability (CV)", `${(bm.f0_cv || 0).toFixed(3)}`],
+      ["Local Jitter", `${(bm.jitter_pct || 0).toFixed(2)} %`],
+      ["Local Shimmer", `${(bm.shimmer_pct || 0).toFixed(2)} %`],
+      ["Harmonics-to-Noise", `${(bm.hnr_db || 0).toFixed(1)} dB`],
+      ["Speech Rate", `${(bm.speech_rate_sps || 0).toFixed(2)} syl/s`],
+      ["Pause Ratio", `${((bm.pause_ratio || 0) * 100).toFixed(1)} %`],
+      ["Alpha Spectral Tilt", `${(bm.alpha_ratio_db || 0).toFixed(1)} dB`],
+    ];
+    bmGrid.innerHTML = bmCells.map(([lbl, val]) => `
+      <div class="voice-biomarker-cell">
+        <div class="voice-bm-label">${lbl}</div>
+        <div class="voice-bm-val">${val}</div>
+      </div>
+    `).join("");
+  }
+
+  /* -----------------------------------------------------------------------
+     8. RENDER ALL SCREENS
      ----------------------------------------------------------------------- */
   function renderHUD() {
     const A = state.assessment;
     if (A && A.overall) {
       document.getElementById("hudHealthDot").className = `risk-dot ${A.overall.level}`;
-      document.getElementById("hudHealthText").textContent = `${t("healthRisk")} ${A.overall.risk_pct.toFixed(0)}%`;
+      document.getElementById("hudHealthText").textContent = `${A.overall.risk_pct.toFixed(0)}%`;
+    }
+    const vr = state.voiceResult || (A && A.voice);
+    if (vr && vr.voice_risk_pct !== undefined) {
+      document.getElementById("hudVoiceDot").className = `risk-dot ${vr.level || riskLevel(vr.voice_risk_pct)}`;
+      document.getElementById("hudVoiceText").textContent = `${Number(vr.voice_risk_pct).toFixed(0)}%`;
     }
     if (A && A.environment && A.environment.hazard_index_pct !== undefined) {
       document.getElementById("hudEnvDot").className = `risk-dot ${A.environment.level}`;
@@ -621,46 +972,144 @@
       document.getElementById("hudXpText").textContent = `Lv ${g.level} · ${g.xp} XP`;
     }
     const badge = document.getElementById("menuTasksBadge");
-    if (state.pendingTasks.length > 0) {
-      badge.textContent = String(state.pendingTasks.length);
-      badge.hidden = false;
-    } else {
-      badge.hidden = true;
+    if (badge) {
+      if (state.pendingTasks.length > 0) {
+        badge.textContent = String(state.pendingTasks.length);
+        badge.hidden = false;
+      } else {
+        badge.hidden = true;
+      }
     }
   }
 
   function renderHome() {
-    const strip = document.getElementById("homeStatusStrip");
+    const A = state.assessment;
+    const vr = state.voiceResult || (A && A.voice);
     const m = state.healthMeta;
-    const modelName = m?.model?.version || "astroguard-net-2.0";
-    const ecgMode = m?.ecg?.mode || "ready";
-    const gemMode = m?.gemini?.configured ? "Gemini Online" : "Offline Edge AI";
-    strip.innerHTML = `
-      <span class="status-chip">🧠 ${modelName} (MCC 0.979)</span>
-      <span class="status-chip">🛰️ 43 Parameters (31 Bio + 12 NASA RIDGE)</span>
-      <span class="status-chip">📈 ECG: ${ecgMode}</span>
-      <span class="status-chip">🤖 ${gemMode}</span>
-    `;
 
-    const grid = document.getElementById("homeQuickGrid");
-    const tiles = [
-      { page: "overall-health", icon: "🛡️", title: t("overall-health"), desc: "43-parameter risk matrix, 10 organ systems & 5 RIDGE cards" },
-      { page: "space-radiation", icon: "☢️", title: t("space-radiation"), desc: "ISS / Lunar / Mars profiles, SPE flares, CO₂ & counterfactual uplift" },
-      { page: "cardiovascular-statistics", icon: "📈", title: t("cardiovascular-statistics"), desc: "24h Mamba-2 wearable stream & 12-lead TEKNOFEST V23 ECG" },
-      { page: "diet", icon: "🥗", title: t("diet"), desc: "Space pantry stock bars, 0–100% meal portions, hydration & AI sync" },
-      { page: "exercise-tracker", icon: "🦴", title: t("exercise-tracker"), desc: "ARED workouts & Neural ODE +30/+90/+180d bone/muscle projections" },
-      { page: "rewards", icon: "🏆", title: t("rewards"), desc: "AI mitigation tasks, XP levels, streaks & 18 spaceflight badges" },
-    ];
-    grid.innerHTML = tiles.map((tl) => `
-      <button type="button" class="home-tile" data-goto="${tl.page}">
-        <div class="home-tile-icon">${tl.icon}</div>
-        <div class="home-tile-title">${tl.title}</div>
-        <div class="home-tile-desc">${tl.desc}</div>
-      </button>
-    `).join("");
-    grid.querySelectorAll("[data-goto]").forEach((btn) =>
-      btn.addEventListener("click", () => showPage(btn.dataset.goto))
-    );
+    // 1. Top 4-Cell KPI Strip
+    const kpiEl = document.getElementById("homeKpiStrip");
+    if (kpiEl) {
+      const oh = (A && A.overall) || { risk_pct: 0, level: "gray", ci_low: 0, ci_high: 0, n_at_risk: 0 };
+      const env = (A && A.environment) || { hazard_index_pct: 0, level: "gray", n_hazards: 0, derived: {} };
+      const vPct = vr ? Number(vr.voice_risk_pct || 0) : 0;
+      const vLvl = vr ? (vr.level || riskLevel(vPct)) : "gray";
+      const vState = vr ? (vr.state_en || vr.state_key || "Nominal") : "Not recorded";
+      const g = state.gamification || { level: 1, xp: 0 };
+
+      kpiEl.innerHTML = `
+        <div class="kpi-cell" data-goto="overall-health">
+          <div class="kpi-label"><span>Overall Health Risk</span><span class="risk-dot ${oh.level}"></span></div>
+          <div class="kpi-val">${oh.risk_pct.toFixed(1)}%</div>
+          <div class="kpi-meta">90% CI ${oh.ci_low}%-${oh.ci_high}% · ${oh.n_at_risk}/31 off-nominal</div>
+        </div>
+        <div class="kpi-cell" data-goto="mental-health">
+          <div class="kpi-label"><span>Voice &amp; Mood Risk</span><span class="risk-dot ${vLvl}"></span></div>
+          <div class="kpi-val">${vPct.toFixed(1)}%</div>
+          <div class="kpi-meta">${vState}</div>
+        </div>
+        <div class="kpi-cell" data-goto="space-radiation">
+          <div class="kpi-label"><span>Space Environment</span><span class="risk-dot ${env.level || "gray"}"></span></div>
+          <div class="kpi-val">${(env.hazard_index_pct || 0).toFixed(1)}%</div>
+          <div class="kpi-meta">Comm delay ${fmtCommDelay(env.derived)} · ${env.n_hazards || 0}/12 active</div>
+        </div>
+        <div class="kpi-cell" data-goto="rewards">
+          <div class="kpi-label"><span>Pending Protocols</span><span class="mono-meta">Lv ${g.level}</span></div>
+          <div class="kpi-val">${state.pendingTasks.length}</div>
+          <div class="kpi-meta">${g.xp} XP · ${state.doneTasks.length} completed</div>
+        </div>
+      `;
+      kpiEl.querySelectorAll("[data-goto]").forEach((el) =>
+        el.addEventListener("click", () => showPage(el.dataset.goto))
+      );
+    }
+
+    // 2. Overview Assessment Summary
+    const homeBriefing = document.getElementById("homeBriefingBox");
+    if (homeBriefing) {
+      if (!A || !A.advisor) {
+        homeBriefing.innerHTML = `<p class="dim-note">Running initial telemetry assessment...</p>`;
+      } else {
+        const adv = A.advisor;
+        const recs = (adv.recommendations || []).map((r) => `<li>${r}</li>`).join("");
+        const modeText = (adv.user_role || state.userRole) === "doctor" ? "Clinical Mode" : "Standard Mode";
+        homeBriefing.innerHTML = `
+          <div class="briefing-banner ${adv.escalate ? "escalate" : ""}">
+            <div class="row-between">
+              <span class="mono-meta">${adv.source || "edge"} · ${modeText}</span>
+              ${adv.escalate ? `<span class="menu-badge" style="background:rgba(229,72,77,0.22);border-color:#e5484d;color:#fecdd3;">Medical Escalation</span>` : ""}
+            </div>
+            <p class="briefing-summary">${adv.summary || ""}</p>
+            ${recs ? `<ul class="briefing-recs">${recs}</ul>` : ""}
+          </div>
+        `;
+      }
+    }
+
+    // 3. Overview Organ Systems Grid
+    const homeSys = document.getElementById("homeSystemsGrid");
+    if (homeSys && A && A.systems) {
+      homeSys.innerHTML = Object.entries(A.systems).map(([cat, s]) => `
+        <div class="sys-card" data-goto="${CATEGORY_SCREEN_MAP[cat] || "biochemical-statistics"}">
+          <div class="sys-top">
+            <span>${s.label}</span>
+            <span class="risk-dot ${s.level}"></span>
+          </div>
+          <div class="sys-val">${s.risk_pct.toFixed(0)}%</div>
+          <div class="mini-bar"><span style="width:${Math.max(3, s.risk_pct)}%;background:${LEVEL_COLORS[s.level]}"></span></div>
+        </div>
+      `).join("");
+      homeSys.querySelectorAll("[data-goto]").forEach((el) =>
+        el.addEventListener("click", () => showPage(el.dataset.goto))
+      );
+    }
+
+    // 4. Overview Voice Summary Card
+    const homeVoice = document.getElementById("homeVoiceBox");
+    if (homeVoice) {
+      if (!vr) {
+        homeVoice.innerHTML = `<p class="dim-note">No voice clip analyzed yet.</p>`;
+      } else {
+        const mood = vr.mood || {};
+        const rows = [
+          ["Valence", mood.valence_pct || 0, "#29b377"],
+          ["Arousal", mood.arousal_pct || 0, "#9b87f5"],
+          ["Stress", mood.stress_pct || 0, "#e5484d"],
+          ["Fatigue", mood.fatigue_pct || 0, "#df9f15"],
+        ];
+        homeVoice.innerHTML = `
+          <div class="row-between" style="margin-bottom:8px;">
+            <div>
+              <span class="risk-dot ${vr.level || riskLevel(vr.voice_risk_pct)}"></span>
+              <strong style="margin-left:5px;">${vr.state_en || vr.state_key}</strong>
+            </div>
+            <span class="mono-meta">Risk ${Number(vr.voice_risk_pct || 0).toFixed(1)}%</span>
+          </div>
+          ${rows.map(([lbl, v, col]) => `
+            <div class="voice-mood-row" style="margin-bottom:6px;">
+              <div class="voice-mood-head"><span>${lbl}</span><b>${Number(v).toFixed(0)}%</b></div>
+              <div class="mini-bar"><span style="width:${Math.max(2, Math.min(100, v))}%;background:${col}"></span></div>
+            </div>
+          `).join("")}
+        `;
+      }
+    }
+
+    // 5. Subsystem Specification Table
+    const strip = document.getElementById("homeStatusStrip");
+    if (strip) {
+      const modelName = m?.model?.version || "AstrocyteX-Net-3.0";
+      const voiceModel = m?.voice?.model_version || "AstrocyteX-Voice-1.0";
+      const ecgMode = m?.ecg?.mode || "builtin-screening";
+      const gemMode = m?.gemini?.configured ? "Gemini Structured Advisor" : "Offline Clinical Reasoner";
+      strip.innerHTML = `
+        <div class="spec-row"><span class="spec-key">Multimodal Backbone</span><span class="spec-val">${modelName}</span></div>
+        <div class="spec-row"><span class="spec-key">Vocal Acoustic Model</span><span class="spec-val">${voiceModel}</span></div>
+        <div class="spec-row"><span class="spec-key">Telemetry Channels</span><span class="spec-val">31 Physiological + 12 Environment</span></div>
+        <div class="spec-row"><span class="spec-key">12-Lead ECG Engine</span><span class="spec-val">${ecgMode}</span></div>
+        <div class="spec-row"><span class="spec-key">Decision Support</span><span class="spec-val">${gemMode}</span></div>
+      `;
+    }
   }
 
   function renderOverallHealth() {
@@ -668,41 +1117,46 @@
     if (!A) return;
 
     const oh = A.overall;
+    const voiceLine = oh.voice_risk_pct !== undefined
+      ? `<div class="mono-meta" style="margin-top:4px;">
+           Physiological: ${oh.physiological_risk_pct}% · Vocal Risk: ${oh.voice_risk_pct}% (${oh.voice_state || "-"})
+         </div>`
+      : "";
     document.getElementById("overallHealthGaugeCard").innerHTML = `
       <h3 class="card-title"><span>${t("overallHealthTitle")}</span></h3>
-      ${svgRingGauge(oh.risk_pct, oh.level, `90% CI: <b>${oh.ci_low}% – ${oh.ci_high}%</b> · At-risk biomarkers: <b>${oh.n_at_risk}</b> / 31`)}
+      ${linearMeterHtml(oh.risk_pct, oh.level, `90% CI: <strong>${oh.ci_low}% - ${oh.ci_high}%</strong> · Off-nominal biomarkers: <strong>${oh.n_at_risk}</strong> / 31${voiceLine}`)}
     `;
 
     const env = A.environment || {};
     const upPts = env.uplift ? env.uplift.uplift_pts : 0;
     const upHtml = upPts > 0.3
-      ? `<div class="uplift-pill">⚡ Space environment adds <b>+${upPts.toFixed(1)} pts</b> to physiological risk</div>`
+      ? `<div class="uplift-pill">Environmental uplift: +${upPts.toFixed(1)} pts physiological risk</div>`
       : "";
     document.getElementById("envHazardGaugeCard").innerHTML = `
       <h3 class="card-title"><span>${t("envHazardTitle")}</span></h3>
-      ${svgRingGauge(env.hazard_index_pct || 0, env.level || "gray",
-        `Active space hazards: <b>${env.n_hazards || 0}</b> / 12 · Comm delay: <b>${fmtCommDelay(env.derived)}</b>${upHtml}`)}
+      ${linearMeterHtml(env.hazard_index_pct || 0, env.level || "gray",
+        `Active hazards: <strong>${env.n_hazards || 0}</strong> / 12 · Comm delay: <strong>${fmtCommDelay(env.derived)}</strong>${upHtml}`)}
     `;
 
     const adv = A.advisor || {};
     const recs = (adv.recommendations || []).map((r) => `<li>${r}</li>`).join("");
+    const roleTag = (adv.user_role || state.userRole) === "doctor" ? "Clinical Mode" : "Standard Mode";
     document.getElementById("aiBriefingBox").innerHTML = `
       <div class="briefing-banner ${adv.escalate ? "escalate" : ""}">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-          <strong>🩺 ${t("aiBriefing")} (${adv.source || "AI"})</strong>
-          ${adv.escalate ? `<span class="menu-badge" style="background:rgba(231,76,60,0.35);border-color:#ff7a7a;color:#fff;">🚨 ESCALATE TO FLIGHT SURGEON</span>` : ""}
+        <div class="row-between">
+          <strong>${t("aiBriefing")} (${adv.source || "edge"} · ${roleTag})</strong>
+          ${adv.escalate ? `<span class="menu-badge" style="background:rgba(229,72,77,0.22);border-color:#e5484d;color:#fecdd3;">Medical Escalation</span>` : ""}
         </div>
         <p class="briefing-summary">${adv.summary || ""}</p>
         ${recs ? `<ul class="briefing-recs">${recs}</ul>` : ""}
       </div>
     `;
 
-    // 10 Organ systems
     const sysGrid = document.getElementById("organSystemsGrid");
     sysGrid.innerHTML = Object.entries(A.systems || {}).map(([cat, s]) => `
       <div class="sys-card" data-goto="${CATEGORY_SCREEN_MAP[cat] || "biochemical-statistics"}">
         <div class="sys-top">
-          <span>${s.icon} ${currentLang === "tr" ? s.label_tr : s.label}</span>
+          <span>${s.label}</span>
           <span class="risk-dot ${s.level}"></span>
         </div>
         <div class="sys-val">${s.risk_pct.toFixed(0)}%</div>
@@ -713,12 +1167,11 @@
       el.addEventListener("click", () => showPage(el.dataset.goto))
     );
 
-    // 5 NASA RIDGE themes
     const ridgeGrid = document.getElementById("ridgeThemesGrid");
-    ridgeGrid.innerHTML = Object.entries((env.themes) || {}).map(([cat, s]) => `
+    ridgeGrid.innerHTML = Object.entries((env.themes) || {}).map(([_cat, s]) => `
       <div class="sys-card" data-goto="space-radiation">
         <div class="sys-top">
-          <span>${s.icon} ${currentLang === "tr" ? s.label_tr : s.label}</span>
+          <span>${s.label}</span>
           <span class="risk-dot ${s.level}"></span>
         </div>
         <div class="sys-val">${s.risk_pct.toFixed(0)}%</div>
@@ -729,10 +1182,10 @@
       el.addEventListener("click", () => showPage(el.dataset.goto))
     );
 
-    // Filter chips + 43-parameter table
+    const filterLabels = { all: "All (43)", risky: "Off-Nominal", health: "Physiological (31)", environment: "Environment (12)" };
     const fRow = document.getElementById("tableFilterRow");
     fRow.innerHTML = ["all", "risky", "health", "environment"].map((f) => `
-      <button type="button" class="chip-btn ${state.tableFilter === f ? "active" : ""}" data-tf="${f}">${f.toUpperCase()}</button>
+      <button type="button" class="chip-btn ${state.tableFilter === f ? "active" : ""}" data-tf="${f}">${filterLabels[f]}</button>
     `).join("");
     fRow.querySelectorAll("[data-tf]").forEach((b) => b.addEventListener("click", () => {
       state.tableFilter = b.dataset.tf;
@@ -761,13 +1214,13 @@
         <tbody>
           ${rows.map((p) => `
             <tr>
-              <td><span class="risk-dot ${p.level}"></span> &nbsp;<b>${currentLang === "tr" ? p.name_tr : p.name}</b></td>
-              <td>${p.value !== null ? p.value : "—"} ${p.unit || ""}</td>
-              <td style="color:rgba(205,222,255,0.72);">${p.normal_range}</td>
-              <td>${p.rule_risk_pct !== null ? p.rule_risk_pct.toFixed(1) + "%" : "—"}</td>
-              <td>${p.model_risk_pct !== null ? p.model_risk_pct.toFixed(1) + "%" : "—"}</td>
-              <td><b>${p.risk_pct !== null ? p.risk_pct.toFixed(1) + "%" : "—"}</b>
-                  ${p.ci_low !== null ? `<span style="font-size:0.76rem;color:rgba(200,220,255,0.65);"> [${p.ci_low}–${p.ci_high}%]</span>` : ""}
+              <td><span class="risk-dot ${p.level}"></span> &nbsp;<strong>${p.name}</strong></td>
+              <td style="font-family:var(--mono);">${p.value !== null ? p.value : "-"} ${p.unit || ""}</td>
+              <td style="font-family:var(--mono);color:var(--text-muted);">${p.normal_range}</td>
+              <td style="font-family:var(--mono);">${p.rule_risk_pct !== null ? p.rule_risk_pct.toFixed(1) + "%" : "-"}</td>
+              <td style="font-family:var(--mono);">${p.model_risk_pct !== null ? p.model_risk_pct.toFixed(1) + "%" : "-"}</td>
+              <td style="font-family:var(--mono);"><strong>${p.risk_pct !== null ? p.risk_pct.toFixed(1) + "%" : "-"}</strong>
+                  ${p.ci_low !== null ? `<span class="mono-meta"> [${p.ci_low}-${p.ci_high}%]</span>` : ""}
               </td>
             </tr>
           `).join("")}
@@ -796,14 +1249,14 @@
       "heart_rate", "spo2", "systolic_bp", "diastolic_bp", "resp_rate", "body_temp", "gsr", "ecg_qtc_ms", "ecg_abnormal_pct",
     ]);
 
-    // Detected subjective symptoms
     const symBox = document.getElementById("detectedSymptomsBox");
     const syms = (state.assessment && state.assessment.subjective_symptoms) || [];
-    symBox.innerHTML = syms.length
-      ? `${t("detectedSymptoms")}: ` + syms.map((s) => `<span class="status-chip">${s}</span>`).join(" ")
-      : "";
+    if (symBox) {
+      symBox.innerHTML = syms.length
+        ? `${t("detectedSymptoms")}: ` + syms.map((s) => `<span class="status-chip">${s}</span>`).join(" ")
+        : "";
+    }
 
-    // Environment derived metrics + hazard attention
     const env = (state.assessment && state.assessment.environment) || {};
     const der = env.derived || {};
     const cumDose = state.values.radiation_cumulative_msv || 0;
@@ -811,19 +1264,19 @@
     if (radCards) {
       radCards.innerHTML = `
         <div class="glass-card">
-          <div style="font-size:0.84rem;color:#b8d4ff;">📡 ${t("commDelay")}</div>
-          <div style="font-size:1.75rem;font-weight:800;margin-top:6px;">${fmtCommDelay(der)}</div>
-          <div style="font-size:0.8rem;color:rgba(210,226,255,0.68);margin-top:4px;">Distance: ${state.values.earth_distance_mkm || 0} × 10⁶ km</div>
+          <div class="sub-label">${t("commDelay")}</div>
+          <div class="kpi-val">${fmtCommDelay(der)}</div>
+          <div class="dim-note" style="margin-top:4px;">Earth distance: ${state.values.earth_distance_mkm || 0} x 10^6 km</div>
         </div>
         <div class="glass-card">
-          <div style="font-size:0.84rem;color:#b8d4ff;">🚑 ${t("evacTime")}</div>
-          <div style="font-size:1.75rem;font-weight:800;margin-top:6px;">${fmtEvacTime(der)}</div>
-          <div style="font-size:0.8rem;color:rgba(210,226,255,0.68);margin-top:4px;">Definitive Earth medical care</div>
+          <div class="sub-label">${t("evacTime")}</div>
+          <div class="kpi-val">${fmtEvacTime(der)}</div>
+          <div class="dim-note" style="margin-top:4px;">Estimated return to definitive care</div>
         </div>
         <div class="glass-card">
-          <div style="font-size:0.84rem;color:#b8d4ff;">☢️ ${t("careerDose")}</div>
-          <div style="font-size:1.75rem;font-weight:800;margin-top:6px;">${cumDose.toFixed(0)} / 600 mSv</div>
-          <div class="mini-bar"><span style="width:${Math.min(100, (cumDose / 600) * 100)}%;background:${cumDose > 350 ? "#e74c3c" : "#2ecc71"}"></span></div>
+          <div class="sub-label">${t("careerDose")}</div>
+          <div class="kpi-val">${cumDose.toFixed(0)} / 600 mSv</div>
+          <div class="mini-bar" style="margin-top:8px;"><span style="width:${Math.min(100, (cumDose / 600) * 100)}%;background:${cumDose > 350 ? "#e5484d" : "#29b377"}"></span></div>
         </div>
       `;
     }
@@ -834,26 +1287,25 @@
       hzBox.innerHTML = entries.map(([k, w]) => {
         const p = state.paramByKey[k];
         return `
-          <div style="margin-bottom:8px;">
-            <div style="display:flex;justify-content:space-between;font-size:0.84rem;">
+          <div style="margin-bottom:7px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;">
               <span>${p ? paramLabel(p) : k}</span>
-              <b>${(w * 100).toFixed(1)}%</b>
+              <b style="font-family:var(--mono);">${(w * 100).toFixed(1)}%</b>
             </div>
-            <div class="mini-bar"><span style="width:${Math.min(100, w * 320)}%;background:#6ea8ff"></span></div>
+            <div class="mini-bar"><span style="width:${Math.min(100, w * 320)}%;background:#9b87f5"></span></div>
           </div>
         `;
       }).join("");
     }
 
-    // Neural ODE metrics cards
     const odeRow = document.getElementById("odeMetricsRow");
     if (odeRow && state.assessment && state.assessment.physics && state.assessment.physics.projections) {
       const p180 = state.assessment.physics.projections["+180d"] || {};
       odeRow.innerHTML = `
-        <div class="sys-card"><div class="sys-top">🦴 +180d Bone BMD</div><div class="sys-val">${(p180.bone_density_change_pct || 0).toFixed(2)}%</div></div>
-        <div class="sys-card"><div class="sys-top">💪 +180d Muscle Mass</div><div class="sys-val">${(p180.muscle_mass_change_pct || 0).toFixed(2)}%</div></div>
-        <div class="sys-card"><div class="sys-top">🧠 Cephalad Fluid</div><div class="sys-val">${(p180.fluid_shift_L || 0).toFixed(2)} L</div></div>
-        <div class="sys-card"><div class="sys-top">🩸 Plasma Volume Δ</div><div class="sys-val">${(p180.plasma_volume_change_pct || 0).toFixed(1)}%</div></div>
+        <div class="sys-card"><div class="sys-top"><span>+180d Bone Mineral Density</span></div><div class="sys-val">${(p180.bone_density_change_pct || 0).toFixed(2)}%</div></div>
+        <div class="sys-card"><div class="sys-top"><span>+180d Lean Muscle Mass</span></div><div class="sys-val">${(p180.muscle_mass_change_pct || 0).toFixed(2)}%</div></div>
+        <div class="sys-card"><div class="sys-top"><span>Cephalad Fluid Shift</span></div><div class="sys-val">${(p180.fluid_shift_L || 0).toFixed(2)} L</div></div>
+        <div class="sys-card"><div class="sys-top"><span>Plasma Volume Delta</span></div><div class="sys-val">${(p180.plasma_volume_change_pct || 0).toFixed(1)}%</div></div>
       `;
     }
   }
@@ -865,43 +1317,45 @@
       const mods = Object.entries(A.modality_attention || {});
       const drivers = A.trend_drivers || [];
       modBox.innerHTML = `
-        <div style="margin-bottom:14px;">
+        <div style="margin-bottom:12px;">
           ${mods.map(([m, w]) => `
             <div style="margin-bottom:7px;">
-              <div style="display:flex;justify-content:space-between;font-size:0.84rem;">
-                <span>Modality: <b>${m}</b></span><span>${(w * 100).toFixed(1)}%</span>
+              <div style="display:flex;justify-content:space-between;font-size:12px;">
+                <span>${m}</span><span style="font-family:var(--mono);">${(w * 100).toFixed(1)}%</span>
               </div>
-              <div class="mini-bar"><span style="width:${Math.min(100, w * 220)}%;background:#8ab4ff"></span></div>
+              <div class="mini-bar"><span style="width:${Math.min(100, w * 220)}%;background:#9b87f5"></span></div>
             </div>
           `).join("")}
         </div>
-        <hr style="border:none;border-top:1px solid rgba(255,255,255,0.12);margin:12px 0;">
+        <hr style="border:none;border-top:1px solid var(--border);margin:10px 0;">
+        <div class="sub-label">Top Longitudinal Trend Drivers</div>
         <div>
           ${drivers.map((d) => `
-            <div style="display:flex;justify-content:space-between;font-size:0.83rem;padding:4px 0;">
-              <span>🔹 ${d.name}</span><b>${(d.weight * 100).toFixed(1)}%</b>
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;">
+              <span>${d.name}</span><b style="font-family:var(--mono);">${(d.weight * 100).toFixed(1)}%</b>
             </div>
           `).join("")}
         </div>
       `;
     }
 
-    // Gamification hero + tasks + badges
     const g = state.gamification;
     const gHero = document.getElementById("gamificationHeroCard");
     if (g && gHero) {
       const startXp = g.level_xp ?? g.current_level_xp ?? 0;
       const span = Math.max(1, (g.next_level_xp || 60) - startXp);
-      const pct = g.progress !== undefined ? Math.min(100, Math.max(0, g.progress * 100)) : Math.min(100, Math.max(0, ((g.xp - startXp) / span) * 100));
+      const pct = g.progress !== undefined
+        ? Math.min(100, Math.max(0, g.progress * 100))
+        : Math.min(100, Math.max(0, ((g.xp - startXp) / span) * 100));
       gHero.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:10px;">
+        <div class="row-between" style="margin-bottom:8px;">
           <div>
-            <div style="font-size:1.5rem;font-weight:800;">🎖️ Level ${g.level} — ${g.rank}</div>
-            <div style="font-size:0.88rem;color:rgba(215,230,255,0.8);">${g.xp} XP (Next level at ${g.next_level_xp} XP)</div>
+            <div style="font-size:15px;font-weight:600;">Level ${g.level} · ${g.rank}</div>
+            <div class="mono-meta">${g.xp} XP (Next tier at ${g.next_level_xp} XP)</div>
           </div>
-          <div style="display:flex;gap:10px;">
-            <span class="status-chip">🔥 Streak: <b>${g.streak_days}d</b></span>
-            <span class="status-chip">✅ Completed: <b>${g.tasks_completed ?? g.total_completed ?? 0}</b></span>
+          <div class="row-wrap">
+            <span class="status-chip">Streak: ${g.streak_days}d</span>
+            <span class="status-chip">Completed: ${g.tasks_completed ?? g.total_completed ?? 0}</span>
           </div>
         </div>
         <div class="xp-bar-outer"><div class="xp-bar-inner" style="width:${pct.toFixed(1)}%"></div></div>
@@ -919,14 +1373,14 @@
     const activeEl = document.getElementById("activeTasksList");
     if (activeEl) {
       if (!state.pendingTasks.length) {
-        activeEl.innerHTML = `<p style="color:rgba(215,230,255,0.65);font-size:0.9rem;">${t("noTasksYet")}</p>`;
+        activeEl.innerHTML = `<p class="dim-note">${t("noTasksYet")}</p>`;
       } else {
         activeEl.innerHTML = state.pendingTasks.map((tk) => `
           <div class="task-item">
             <div class="task-info">
               <div class="task-title"><span class="risk-dot ${tk.severity_level}"></span> ${tk.title}</div>
               <div class="task-desc">${tk.description}</div>
-              <div class="task-meta">⏱ ${tk.duration_min} min · 🎯 +${tk.points} XP · #${tk.tag || tk.parameter_key}</div>
+              <div class="task-meta">${tk.duration_min} min · +${tk.points} XP · ${tk.tag || tk.parameter_key}</div>
             </div>
             <button type="button" class="btn success small" data-complete-task="${tk.id}">${t("completeBtn")} (+${tk.points} XP)</button>
           </div>
@@ -940,11 +1394,11 @@
     const doneEl = document.getElementById("doneTasksList");
     if (doneEl) {
       doneEl.innerHTML = !state.doneTasks.length
-        ? `<p style="color:rgba(215,230,255,0.55);font-size:0.88rem;">—</p>`
+        ? `<p class="dim-note">No completed protocols in this session.</p>`
         : state.doneTasks.slice(0, 12).map((tk) => `
-          <div class="task-item" style="opacity:0.78;">
+          <div class="task-item" style="opacity:0.72;">
             <div class="task-info">
-              <div class="task-title">✅ ${tk.title}</div>
+              <div class="task-title">${tk.title}</div>
               <div class="task-meta">+${tk.points} XP · ${tk.completed_at ? tk.completed_at.slice(0, 16).replace("T", " ") : ""}</div>
             </div>
           </div>
@@ -956,19 +1410,20 @@
     renderHUD();
     renderHome();
     renderOverallHealth();
+    renderVoiceStudio();
     renderCategoryInputScreens();
     renderProgressAndRewards();
     redrawVisibleCanvases();
   }
 
   /* -----------------------------------------------------------------------
-     8. API CALLS & INTERACTIVE WORKFLOWS
+     9. API CALLS & INTERACTIVE WORKFLOWS
      ----------------------------------------------------------------------- */
   async function refreshTasksAndGamification() {
     const aid = encodeURIComponent(state.astronautId);
     const [pTasks, dTasks, gam, hist] = await Promise.all([
-      fetch(`/astronauts/${aid}/tasks?status=pending`).then((r) => r.json()),
-      fetch(`/astronauts/${aid}/tasks?status=done`).then((r) => r.json()),
+      fetch(`/astronauts/${aid}/tasks?status=pending&lang=en`).then((r) => r.json()),
+      fetch(`/astronauts/${aid}/tasks?status=done&lang=en`).then((r) => r.json()),
       fetch(`/astronauts/${aid}/gamification`).then((r) => r.json()),
       fetch(`/astronauts/${aid}/history`).then((r) => r.json()),
     ]);
@@ -984,14 +1439,21 @@
     btn.textContent = t("runningAI");
     try {
       const aid = encodeURIComponent(state.astronautId);
+      let voicePayload = null;
+      if (state.voiceResult) {
+        const { audio_wav_base64, waveform_preview, mel_spectrogram_preview, ...compactVoice } = state.voiceResult;
+        voicePayload = compactVoice;
+      }
       const body = {
         values: state.values,
         sensor_series: state.sensorSeries,
         subjective_log: state.subjectiveLog || "",
         mission_day: state.missionDay,
         ecg: state.ecgResult,
+        voice: voicePayload,
+        user_role: state.userRole,
       };
-      const res = await fetch(`/astronauts/${aid}/assess?lang=${apiLang()}`, {
+      const res = await fetch(`/astronauts/${aid}/assess?lang=en`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1002,11 +1464,11 @@
       renderAllScreens();
       if (!silent) {
         const nNew = (state.assessment.new_tasks || []).length;
-        showToast(`✅ Health Risk: ${state.assessment.overall.risk_pct}%` + (nNew ? ` · +${nNew} new mitigation tasks` : ""));
+        showToast(`Overall risk: ${state.assessment.overall.risk_pct}%` + (nNew ? ` · +${nNew} protocol(s)` : ""));
       }
     } catch (err) {
       console.error(err);
-      if (!silent) showToast("⚠️ Assessment error: " + err.message);
+      if (!silent) showToast("Assessment error: " + err.message);
     } finally {
       btn.disabled = false;
       btn.textContent = t("runAI");
@@ -1020,10 +1482,10 @@
     const out = await res.json();
     await refreshTasksAndGamification();
     renderAllScreens();
-    let msg = `🎉 +${out.points_awarded} XP!`;
-    if (out.leveled_up) msg += ` 🚀 LEVEL UP → Lv ${out.state.level} (${out.state.rank})!`;
+    let msg = `+${out.points_awarded} XP earned`;
+    if (out.leveled_up) msg += ` · Level ${out.state.level} (${out.state.rank})`;
     if (out.new_badges && out.new_badges.length) {
-      msg += " 🏅 " + out.new_badges.map((b) => `${b.icon} ${b.name}`).join(", ");
+      msg += " · Milestone: " + out.new_badges.map((b) => b.name).join(", ");
     }
     showToast(msg);
   }
@@ -1046,7 +1508,7 @@
   async function applyScenario(scenName) {
     state.scenario = scenName;
     document.getElementById("hudScenario").value = scenName;
-    const res = await fetch(`/presets/scenario/${encodeURIComponent(scenName)}?lang=${apiLang()}`).then((r) => r.json());
+    const res = await fetch(`/presets/scenario/${encodeURIComponent(scenName)}?lang=en`).then((r) => r.json());
     Object.entries(res.values || {}).forEach(([k, v]) => setParamValue(k, v));
     state.subjectiveLog = res.subjective_log || "";
     document.getElementById("subjLogInput").value = state.subjectiveLog;
@@ -1058,14 +1520,14 @@
     const res = await fetch("/environment/apply-event", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ values: state.values, event: evName, lang: apiLang() }),
+      body: JSON.stringify({ values: state.values, event: evName, lang: "en" }),
     }).then((r) => r.json());
     Object.entries(res.values || {}).forEach(([k, v]) => setParamValue(k, v));
     if (res.log && !state.subjectiveLog.includes(res.log)) {
       state.subjectiveLog = (state.subjectiveLog + " " + res.log).trim();
       document.getElementById("subjLogInput").value = state.subjectiveLog;
     }
-    showToast(`⚡ Injected event: ${evName}`);
+    showToast(`Simulated event: ${formatScenarioTitle(evName)}`);
     await runAssessment();
   }
 
@@ -1083,12 +1545,12 @@
     const probsEl = document.getElementById("ecgProbBars");
     if (!ecg) { banner.innerHTML = ""; probsEl.innerHTML = ""; return; }
     banner.innerHTML = `
-      <div class="briefing-banner" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div class="briefing-banner row-between">
         <div>
-          <div style="font-size:1.08rem;font-weight:800;">💓 ${ecg.class_code} — ${ecg.class_name} (${ecg.source})</div>
-          <div style="font-size:0.86rem;color:#cfe2ff;margin-top:3px;">
-            HR: <b>${(ecg.heart_rate || 0).toFixed(1)} bpm</b> · QTc: <b>${(ecg.qtc_ms || 0).toFixed(0)} ms</b> ·
-            Rhythm: <b>${ecg.rr_regularity}</b> · Abnormal prob: <b>${(ecg.abnormal_probability_pct || 0).toFixed(1)}%</b>
+          <div style="font-size:13.5px;font-weight:600;">${ecg.class_code} — ${ecg.class_name} (${ecg.source})</div>
+          <div class="mono-meta" style="margin-top:3px;">
+            HR ${(ecg.heart_rate || 0).toFixed(1)} bpm · QTc ${(ecg.qtc_ms || 0).toFixed(0)} ms ·
+            Rhythm: ${ecg.rr_regularity} · Abnormal probability: ${(ecg.abnormal_probability_pct || 0).toFixed(1)}%
           </div>
         </div>
         <button type="button" class="btn success small" id="applyEcgNowBtn">${t("applyEcgBtn")}</button>
@@ -1104,15 +1566,27 @@
       : Object.entries(ecg.probabilities || {}).map(([k, v]) => [k, Number(v) * 100]);
     const probs = rawProbs.slice(0, 6);
     probsEl.innerHTML = probs.length ? `<div class="grid-3">` + probs.map(([cName, pctVal]) => `
-      <div style="background:rgba(255,255,255,0.05);padding:8px 10px;border-radius:8px;">
-        <div style="display:flex;justify-content:space-between;font-size:0.82rem;"><b>${cName}</b><span>${pctVal.toFixed(1)}%</span></div>
-        <div class="mini-bar"><span style="width:${Math.min(100, pctVal)}%;background:#4df0a8"></span></div>
+      <div class="sub-panel" style="padding:8px 10px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;"><span>${cName}</span><span class="mono-meta">${pctVal.toFixed(1)}%</span></div>
+        <div class="mini-bar"><span style="width:${Math.min(100, pctVal)}%;background:#9b87f5"></span></div>
       </div>
     `).join("") + `</div>` : "";
   }
 
+  function appendSystemChatNotice(text) {
+    const chatBox = document.getElementById("chatMessagesBox");
+    if (!chatBox) return;
+    const div = document.createElement("div");
+    div.className = "chat-bubble ai";
+    div.style.fontSize = "11.5px";
+    div.style.color = "var(--text-dim)";
+    div.textContent = text;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
   /* -----------------------------------------------------------------------
-     9. BOOTSTRAP INITIALIZATION
+     10. INITIALIZATION
      ----------------------------------------------------------------------- */
   async function init() {
     const [healthMeta, reg, presets] = await Promise.all([
@@ -1131,18 +1605,19 @@
     state.scenarios = presets.scenarios;
     state.sensorSeries = presets.initial_sensor_series;
 
-    // Apply initial ISS profile environment values
     const issVals = presets.profiles.iss_leo?.values || {};
     Object.assign(state.values, issVals);
 
-    // Populate HUD dropdowns
+    // Topbar dropdowns
     const scenSel = document.getElementById("hudScenario");
-    scenSel.innerHTML = state.scenarios.map((s) => `<option value="${s}">🩺 ${s.replace(/_/g, " ")}</option>`).join("");
+    scenSel.innerHTML = state.scenarios.map((s) =>
+      `<option value="${s}">Scenario: ${formatScenarioTitle(s)}</option>`
+    ).join("");
     scenSel.addEventListener("change", () => applyScenario(scenSel.value));
 
     const profSel = document.getElementById("hudProfile");
     profSel.innerHTML = Object.entries(state.profiles).map(([k, v]) =>
-      `<option value="${k}" ${k === state.profile ? "selected" : ""}>🚀 ${v.en}</option>`
+      `<option value="${k}" ${k === state.profile ? "selected" : ""}>${v.en}</option>`
     ).join("");
     profSel.addEventListener("change", () => applyMissionProfile(profSel.value));
 
@@ -1152,6 +1627,7 @@
     });
     document.getElementById("hudAssessBtn").addEventListener("click", () => runAssessment());
     document.getElementById("hudHealthPill").addEventListener("click", () => showPage("overall-health"));
+    document.getElementById("hudVoicePill").addEventListener("click", () => showPage("mental-health"));
     document.getElementById("hudEnvPill").addEventListener("click", () => showPage("space-radiation"));
     document.getElementById("hudXpPill").addEventListener("click", () => showPage("rewards"));
 
@@ -1159,7 +1635,45 @@
       b.addEventListener("click", () => runAssessment())
     );
 
-    // Space Radiation profile & event chips
+    // Role buttons ("I am a doctor" / "I am not a doctor")
+    document.querySelectorAll("[data-role-btn]").forEach((btn) => {
+      btn.addEventListener("click", () => setUserRole(btn.dataset.roleBtn, true));
+    });
+
+    // Voice studio controls
+    const vChip = document.getElementById("voiceModelStatusChip");
+    if (vChip) {
+      vChip.textContent = healthMeta.voice?.model_loaded
+        ? `${healthMeta.voice.model_version} (MCC ${healthMeta.voice.validation_mcc ?? "ready"})`
+        : "Acoustic Prior Ready";
+    }
+    const voicePresets = [
+      ["calm_regulated", "Calm / Regulated"],
+      ["cognitive_fatigue", "Cognitive Fatigue"],
+      ["acute_stress", "Acute Stress"],
+      ["low_mood_isolation", "Low Mood / Isolation"],
+      ["dyspnea_hypoxic", "Dyspnea / Hypoxic Strain"],
+    ];
+    const vSampleRow = document.getElementById("voiceSampleBtns");
+    vSampleRow.innerHTML = voicePresets.map(([key, enLbl]) => `
+      <button type="button" class="chip-btn ${key === state.voiceActiveSample ? "active" : ""}" data-vsample="${key}">
+        ${enLbl}
+      </button>
+    `).join("");
+    vSampleRow.querySelectorAll("[data-vsample]").forEach((b) =>
+      b.addEventListener("click", () => loadVoiceSample(b.dataset.vsample, true))
+    );
+
+    document.getElementById("voiceSexSelect").addEventListener("change", (e) => {
+      state.voiceSex = e.target.value;
+      loadVoiceSample(state.voiceActiveSample, true);
+    });
+    document.getElementById("voiceRecordBtn").addEventListener("click", toggleVoiceRecording);
+    document.getElementById("voiceFileInput").addEventListener("change", (e) => {
+      if (e.target.files && e.target.files[0]) handleVoiceFileUpload(e.target.files[0]);
+    });
+
+    // Space Environment profile & event buttons
     const pRow = document.getElementById("profileChipsRow");
     pRow.innerHTML = Object.entries(state.profiles).map(([k, v]) =>
       `<button type="button" class="chip-btn ${k === state.profile ? "active" : ""}" data-prof="${k}">${v.en}</button>`
@@ -1170,7 +1684,7 @@
 
     const eRow = document.getElementById("eventChipsRow");
     eRow.innerHTML = Object.entries(state.events).map(([k, v]) =>
-      `<button type="button" class="chip-btn" data-ev="${k}">⚠️ ${v.en}</button>`
+      `<button type="button" class="chip-btn" data-ev="${k}">${v.en}</button>`
     ).join("");
     eRow.querySelectorAll("[data-ev]").forEach((b) =>
       b.addEventListener("click", () => injectEnvironmentEvent(b.dataset.ev))
@@ -1186,16 +1700,16 @@
       document.getElementById("missionDayBadge").textContent = `Day ${mdSlider.value}`;
     });
 
-    // Subjective log & quick mood chips
+    // Subjective log quick presets (100% English)
     const moodRow = document.getElementById("moodQuickChips");
     const moods = [
       "Mild headache and fatigue after shift",
-      "Baş ağrısı, yorgunluk ve uykusuzluk hissediyorum",
-      "Feeling dizzy upon standing, very thirsty",
+      "Lightheaded upon standing, increased thirst",
       "Shortness of breath and palpitations",
-      "Feeling rested, calm and focused today",
+      "Poor sleep quality and low concentration",
+      "Rested, calm, and focused today",
     ];
-    moodRow.innerHTML = moods.map((m) => `<button type="button" class="chip-btn" data-mood="${m}">💬 ${m.slice(0, 34)}…</button>`).join("");
+    moodRow.innerHTML = moods.map((m) => `<button type="button" class="chip-btn" data-mood="${m}">${m}</button>`).join("");
     moodRow.querySelectorAll("[data-mood]").forEach((b) => b.addEventListener("click", () => {
       state.subjectiveLog = b.dataset.mood;
       document.getElementById("subjLogInput").value = state.subjectiveLog;
@@ -1222,7 +1736,7 @@
       state.sensorSeries = res.sensor_series;
       Object.entries(res.latest || {}).forEach(([k, v]) => setParamValue(k, v));
       redrawVisibleCanvases();
-      showToast("📡 24h Wearable Telemetry Updated");
+      showToast("24-hour sensor stream refreshed.");
     });
 
     // ECG sample buttons + upload
@@ -1242,11 +1756,11 @@
         state.ecgResult = await res.json();
         renderEcgBanner();
         drawECGCanvas();
-        showToast(`📈 ECG Analysed: ${state.ecgResult.class_code}`);
+        showToast(`ECG analyzed: ${state.ecgResult.class_code}`);
       }
     });
 
-    // AI Advisor Chat
+    // Role-Adaptive Advisor Chat
     document.getElementById("geminiStatusBadge").textContent = healthMeta.gemini?.configured ? "Gemini Online" : "Offline Reasoner";
     const chatBox = document.getElementById("chatMessagesBox");
     const addBubble = (who, text) => {
@@ -1256,7 +1770,10 @@
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     };
-    addBubble("ai", "👨‍⚕️ Astrocyte X · AstroGuard-X Flight Surgeon ready. Ask anything about your biomarkers, space radiation, or mitigation tasks.");
+    addBubble(
+      "ai",
+      "AstrocyteX medical advisor ready. Select 'I am a doctor' for clinical pathophysiology and quantitative biomarkers, or 'I am not a doctor' for plain-language guidance."
+    );
 
     document.getElementById("chatForm").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1266,17 +1783,18 @@
       inp.value = "";
       addBubble("user", q);
       const aid = encodeURIComponent(state.astronautId);
-      const res = await fetch(`/astronauts/${aid}/chat?lang=${apiLang()}`, {
+      const res = await fetch(`/astronauts/${aid}/chat?lang=en`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, role: state.userRole }),
       }).then((r) => r.json());
-      addBubble("ai", `[${res.source}] ${res.answer}`);
+      const rBadge = res.role === "doctor" ? "Clinical Mode" : "Standard Mode";
+      addBubble("ai", `[${res.source} · ${rBadge}] ${res.answer}`);
     });
 
-    applyLanguage(currentLang);
+    applyStaticTranslations();
     showPage(location.hash.slice(1) || "home");
-    await loadEcgSample("NORMAL");
+    await Promise.all([loadEcgSample("NORMAL"), loadVoiceSample("calm_regulated", false)]);
     await runAssessment(true);
   }
 
