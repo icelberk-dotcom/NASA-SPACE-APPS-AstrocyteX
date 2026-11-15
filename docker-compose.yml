@@ -1,22 +1,23 @@
-# docker compose up --build   ->  API http://localhost:8000/docs   UI http://localhost:8501
+# docker compose up --build   ->  Web Console + API: http://localhost:8501   OpenAPI Docs: http://localhost:8501/docs
 services:
-  api:
+  astrocytex:
     build: .
-    command: ["python", "run.py", "api"]
-    env_file: [.env]
+    command: ["python", "run.py", "ui"]
+    env_file:
+      - path: .env
+        required: false
     environment:
       ASTROGUARD_DB: /app/data/astroguard.db
-      ASTROGUARD_CORS: http://localhost:8501
-    ports: ["8000:8000"]
-    volumes: ["astroguard-data:/app/data"]
-    # To use the TEKNOFEST ECG package, mount it and set ECG_PACKAGE_PATH=/ecg in .env, e.g.:
-    #   volumes: ["./external/ecg_package:/ecg:ro", "astroguard-data:/app/data"]
-  ui:
-    build: .
-    command: ["python", "-m", "streamlit", "run", "ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
-    environment:
-      ASTROGUARD_API_URL: http://api:8000
+      ASTROGUARD_CORS: http://localhost:8501,http://localhost:8502
     ports: ["8501:8501"]
-    depends_on: [api]
+    volumes: ["astroguard-data:/app/data"]
+  streamlit:
+    build: .
+    profiles: ["streamlit"]
+    command: ["python", "-m", "streamlit", "run", "ui/app.py", "--server.port=8502", "--server.address=0.0.0.0"]
+    environment:
+      ASTROGUARD_API_URL: http://astrocytex:8501
+    ports: ["8502:8502"]
+    depends_on: [astrocytex]
 volumes:
   astroguard-data:

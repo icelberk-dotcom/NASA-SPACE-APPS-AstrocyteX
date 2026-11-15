@@ -15,8 +15,9 @@
 | **Astronaut Voice Psychological & Mood Analysis** | Interactive browser microphone recorder (16 kHz PCM `.wav`), multi-format audio uploader (`.wav`, `.mp3`, `.m4a`, `.ogg`, `.webm`, `.npy`, `.csv`), and playable astronaut voice presets powered by **`AstroVoiceNet v1.0`** (`(48, 64)` log-Mel spectrogram + `42` GeMAPS-inspired prosodic biomarkers) predicting 5 psychological states, 4 mood dimensions (`valence`, `arousal`, `stress`, `fatigue`), and `0-100%` vocal risk fused into overall health risk |
 | **Role-Adaptive LLM Communication** | Selectable **`"I am a doctor"` (`doctor`)** vs **`"I am not a doctor"` (`non_doctor`)** profile across both assessments and interactive chat — delivering quantitative aerospace pathophysiology (`F0`, `jitter`, `shimmer`, `HNR`, `QTc`, cephalad shift, counterfactual uplift) for physicians, or calm jargon-free guidance for crew members |
 | **Upgraded Multimodal Neural Backbone** | **`AstrocyteX-Net v3.0`** (`d_model=80`, `16` Perceiver latents, `SwiGLU GatedInteractionBlock`s): Mamba-2 SSD + TCN/TFT + Environment Encoder & FiLM + 5-Modality Cross-Attention + Neural ODE/PINN + Bayes-by-Backprop & MC-Dropout residual risk head |
-| **12-Lead ECG Integration** | Adapter for the V23 12-lead ECG AI (10 arrhythmia/conduction classes, QTc, abnormal probability) with automatic offline R-peak screening fallback |
-| **Edge-First Autonomy & Gamification** | Operates 100% offline under deep-space communication delays; awards severity-scaled XP, rank promotions (`Cadet` to `Fleet Admiral`), streaks, and 18 operational badges |
+| **12-Lead ECG Integration** | 10-class 12-lead ECG analysis (`NORMAL`, `AFIB`, `AFL`, `LBBB`, `RBBB`, `MI`, `PVC`, `PAC`, `AVB`, `STTC`) reporting `QTc`, `PR`, `QRS`, `ST`, `STEMI Suspected` alerts, and abnormal probability via `OmniNet V23` or automatic offline 10-class screening fallback, auto-synced into overall telemetry risk |
+| **Longitudinal Health History** | Persistent crew snapshot recording (`#health-history`) with comparative vertical bar charts and multi-column 43-parameter + vocal-risk longitudinal telemetry tables |
+| **Edge-First Autonomy & Gamification** | Operates 100% offline on CPU or GPU under deep-space communication delays; awards severity-scaled XP, rank promotions (`Cadet` to `Fleet Admiral`), streaks, and 18 operational badges |
 
 ---
 
@@ -29,7 +30,7 @@ flowchart LR
       D["Daily Labs & Logs (31 Bio)<br/>Sleep, Fluids, Diet, Blood, CBC"]
       V["NASA RIDGE Environment (12)<br/>Radiation, Isolation, Distance, Gravity, Cabin"]
       A["Astronaut Voice Audio (16 kHz)<br/>48-Band Log-Mel + 42 GeMAPS Prosody"]
-      E["12-Lead ECG<br/>TEKNOFEST V23 / Screening"]
+      E["12-Lead ECG<br/>OmniNet V23 / 10-Class Screening"]
     end
     S --> M["Mamba-2 SSD Encoder"]
     D --> H["14-Day 43-Var History"]
@@ -54,27 +55,48 @@ flowchart LR
 
 ---
 
-## Quick Start
+## Quick Start (Cross-Platform — No GPU or API Key Required)
 
-Requires **Python 3.10+** (tested on Python 3.13.7 + PyTorch 2.8 + CUDA 12.6).
+Requires **Python 3.10+** (tested on Python 3.10–3.13 across Windows, macOS, and Linux). Pre-trained checkpoints (`checkpoints/astroguard_v2.pt` and `checkpoints/astrovoice_v1.pt`) are bundled in the repository and automatically run on **CUDA GPU** if available or **CPU** otherwise. No `.env` file or external API key is needed.
 
+### Option A — Windows (PowerShell)
 ```powershell
-# Launch AstrocyteX Dark-Purple Milky Way Web Console + FastAPI Backend (http://localhost:8501)
+git clone https://github.com/icelberk-dotcom/NASA-SPACE-APPS-AstrocyteX.git
+cd NASA-SPACE-APPS-AstrocyteX
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe run.py ui
+```
+Then open **`http://localhost:8501`** in your browser (interactive OpenAPI docs at `http://localhost:8501/docs`).
 
+### Option B — macOS / Linux (Bash / Zsh)
+```bash
+git clone https://github.com/icelberk-dotcom/NASA-SPACE-APPS-AstrocyteX.git
+cd NASA-SPACE-APPS-AstrocyteX
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python run.py ui
+```
+Then open **`http://localhost:8501`** in your browser.
+
+### Option C — Docker
+```bash
+docker compose up --build
+```
+Opens the unified Web Console + REST API on **`http://localhost:8501`**.
+
+### Additional CLI Commands
+```powershell
 # Launch secondary Streamlit Telemetry Console
-.\.venv\Scripts\python.exe run.py streamlit
+python run.py streamlit
 
-# Retrain neural models on GPU & re-run held-out benchmarks
-.\.venv\Scripts\python.exe run.py train-voice
-.\.venv\Scripts\python.exe run.py train
-.\.venv\Scripts\python.exe run.py evaluate
+# Retrain neural models & re-run held-out benchmarks
+python run.py train-voice
+python run.py train
+python run.py evaluate
 
-# Generate Turkish AI Summary & Citation Report (.docx + .md)
-.\.venv\Scripts\python.exe scripts/generate_word_report.py
-
-# Run full automated test suite
-.\.venv\Scripts\python.exe run.py test
+# Run full automated pytest suite (194 tests)
+python run.py test
 ```
 
 ---
@@ -106,11 +128,14 @@ Detailed tables, 1,000-resample bootstrap 95% confidence intervals, subgroup sli
 | `GET /voice/sample/{state_name}` | Synthesise & analyse playable reference astronaut voice clip (`calm_regulated`, `cognitive_fatigue`, `acute_stress`, `low_mood_isolation`, `dyspnea_hypoxic`) |
 | `GET /voice/status` | Voice neural engine status & validation metrics |
 | `POST /ecg/analyze` / `GET /ecg/sample/{CLASS}` | 12-lead ECG analysis (`NORMAL`, `AFIB`, `MI`, `PVC`, ...) |
+| `GET /astronauts/{id}/history` / `DELETE .../history` | List or delete recorded longitudinal 43-parameter + vocal-risk Health History snapshots |
 | `GET /astronauts/{id}/tasks` / `POST .../complete` | Active countermeasure protocols & idempotent XP/badge completion |
 | `GET /parameters` / `GET /presets` / `GET /health` | 43-parameter registry, mission profiles, scenarios, and subsystem health |
 
 ---
 
-## Software Stack & Citations
+## NASA Standards, Citations & Open-Source License
 
-Full software versions, open-source licences, and 28 peer-reviewed references (Dao & Gu Mamba-2, Lim et al. TFT, Jaegle et al. Perceiver, Perez et al. FiLM, Shazeer SwiGLU, Chen et al. Neural ODE, Raissi et al. PINN, Blundell et al. Bayes-by-Backprop, Gal & Ghahramani MC-Dropout, Eyben et al. GeMAPS, Hu et al. SE-Net, Klatt Formant Synthesis, Russell Circumplex Affect, Cao et al. CORAL, Chicco & Jurman MCC, NASA-STD-3001, Paszke et al. PyTorch, Pedregosa et al. scikit-learn) are documented in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`docs/ASTROCYTEX_AI_OZET_RAPORU.md`](docs/ASTROCYTEX_AI_OZET_RAPORU.md).
+- **NASA & Clinical Reference Standards:** Physiological and environmental reference bands are grounded in **NASA-STD-3001** (*Space Flight Human-System Standard, Vols. 1 & 2*), **NASA Human Research Program (HRP) RIDGE** spaceflight hazard profiles, **NASA SMAC / SWMQG** spacecraft air & water quality limits, and peer-reviewed clinical guidelines (AHA/ACC/ESC, KDIGO, WHO, GeMAPS). Full parameter-by-parameter citations are documented in [`docs/PARAMETRE_KAYNAKCA.md`](docs/PARAMETRE_KAYNAKCA.md).
+- **Software Stack, Peer-Reviewed Architectures & AI Disclosure:** Full software versions, open-source notices, AI tool/model disclosures (`AstrocyteX-Net v3.0`, `AstroVoiceNet v1.0`, optional Google Gemini API via `google-genai`), and 28 peer-reviewed references (Dao & Gu Mamba-2, Lim et al. TFT, Jaegle et al. Perceiver, Perez et al. FiLM, Shazeer SwiGLU, Chen et al. Neural ODE, Raissi et al. PINN, Blundell et al. Bayes-by-Backprop, Gal & Ghahramani MC-Dropout, Eyben et al. GeMAPS, Hu et al. SE-Net, Klatt Formant Synthesis, Russell Circumplex Affect, Cao et al. CORAL, Chicco & Jurman MCC) are documented in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`docs/MODEL_EVALUATION.md`](docs/MODEL_EVALUATION.md).
+- **License:** Released under the open-source **[MIT License](LICENSE)**.
