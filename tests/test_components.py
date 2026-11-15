@@ -26,17 +26,33 @@ def test_builtin_ecg_handles_garbage_and_orientation():
 
 
 def test_teknofest_payload_is_normalised():
-    payload = {"record_name": "x.npy", "model_version": "V23.0 OmniNet Apex-Titan",
-               "prediction": {"class_code": "AFIB", "class_name": "Atrial Fibrillation", "confidence_pct": 91.2,
-                              "medical_desc": "d", "severity": {"level": 3, "label": "High", "color": "#e74c3c"}},
-               "probabilities": [{"class_code": "NORMAL", "class_name": "Normal", "percentage": 6.0},
-                                 {"class_code": "AFIB", "class_name": "AF", "percentage": 91.2}],
-               "vitals": {"heart_rate": 118, "qtc_interval": 452, "pr_interval": 0, "qrs_duration": 90, "rr_regularity": "Kaotik"},
+    payload = {"record_name": "ORNEK_AFIB.csv", "model_version": "V23.0 OmniNet Apex-Titan",
+               "prediction": {"class_code": "AFIB", "class_name": "Atriyal Fibrilasyon (AF)", "confidence_pct": 91.2,
+                              "medical_desc": "Kulakçıklarda kaotik uyarılar.", "severity": {"level": 3, "label": "Yüksek Risk", "color": "#e74c3c"}},
+               "probabilities": [{"class_code": "NORMAL", "class_name": "Normal Sinüs Ritmi (NSR)", "percentage": 6.0},
+                                 {"class_code": "AFIB", "class_name": "Atriyal Fibrilasyon (AF)", "percentage": 91.2}],
+               "vitals": {"heart_rate": 118, "qtc_interval": 452, "pr_interval": 0, "qrs_duration": 90, "rr_regularity": "Kaotik / Düzensiz"},
                "v22_biomarkers": {"uncertainty_pct": 8.5}, "sgarbossa_matrix": {"stemi_suspected": False},
                "leads_preview": {"lead_ii": [0.1, 0.2]}}
     r = ECGAdapter._from_teknofest(payload)
     assert r.source == "teknofest-ecg" and r.abnormal_probability_pct == pytest.approx(94.0)
+    assert r.record_name == "SAMPLE_AFIB.csv"
+    assert r.class_name == "Atrial Fibrillation" and r.rr_regularity == "irregular"
+    assert all("Sinüs" not in p["name"] and "Atriyal" not in p["name"] for p in r.probabilities)
+    assert "kaotik" not in r.medical_desc.lower() and "yüksek" not in r.severity_label.lower()
     assert r.parameter_values() == {"ecg_abnormal_pct": 94.0, "ecg_qtc_ms": 452.0, "heart_rate": 118.0}
+
+
+def test_all_10_ecg_samples_are_english_and_populated(settings):
+    from backend.ecg_adapter import ECG_CLASSES
+    from backend.gemini_agent import is_turkish_text
+
+    ad = ECGAdapter(settings)
+    for cls in ECG_CLASSES:
+        s = ad.sample(cls)
+        assert s.class_code == cls and s.qtc_ms and s.heart_rate and s.probabilities
+        assert not is_turkish_text(s.class_name) and not is_turkish_text(s.medical_desc) and not is_turkish_text(s.severity_label)
+    assert ad.sample("MI").stemi_suspected is True and ad.sample("MI").abnormal_probability_pct > 90.0
 
 
 def test_package_discovery(tmp_path, settings):

@@ -54,6 +54,101 @@ log = logging.getLogger("astroguard.ecg")
 ECG_ENTRYPOINT = "TEKNOFEST_EKG_Yapay_Zeka_Sistemi.py"
 ECG_CLASSES = ["NORMAL", "AFIB", "AFL", "LBBB", "RBBB", "MI", "PVC", "PAC", "AVB", "STTC"]
 
+ECG_CLASS_META_EN: Dict[str, Dict[str, Any]] = {
+    "NORMAL": {
+        "name": "Normal Sinus Rhythm",
+        "severity_label": "Low Risk / Nominal",
+        "color": "#29b377",
+        "medical_desc": "Sinoatrial impulse conducts normally through the AV node and His-Purkinje system with regular P waves, normal PR (120-200 ms), narrow QRS (<120 ms), and regular 60-100 bpm ventricular rate.",
+        "hr": 72.0, "qtc_ms": 404.0, "pr_ms": 156.0, "qrs_ms": 88.0, "st_mv": 0.01, "irregular": False, "abn_pct": 5.2, "conf_pct": 94.8, "stemi": False,
+    },
+    "AFIB": {
+        "name": "Atrial Fibrillation",
+        "severity_label": "High Risk / Arrhythmia Alert",
+        "color": "#e5484d",
+        "medical_desc": "Disorganized atrial electrical activation (350-600 bpm) with absent P waves, fibrillatory f-waves, and irregularly irregular R-R intervals; increases thromboembolic stroke risk.",
+        "hr": 118.0, "qtc_ms": 452.0, "pr_ms": None, "qrs_ms": 92.0, "st_mv": -0.04, "irregular": True, "abn_pct": 93.4, "conf_pct": 91.6, "stemi": False,
+    },
+    "AFL": {
+        "name": "Atrial Flutter",
+        "severity_label": "Elevated-High Risk / Cardiology Review",
+        "color": "#df9f15",
+        "medical_desc": "Organized macro-reentrant atrial circuit (250-350 bpm) producing classic sawtooth flutter waves in inferior leads (II, III, aVF) with variable AV conduction.",
+        "hr": 130.0, "qtc_ms": 446.0, "pr_ms": None, "qrs_ms": 90.0, "st_mv": -0.03, "irregular": True, "abn_pct": 85.0, "conf_pct": 88.4, "stemi": False,
+    },
+    "LBBB": {
+        "name": "Left Bundle Branch Block",
+        "severity_label": "Moderate Risk / Conduction Delay",
+        "color": "#9b87f5",
+        "medical_desc": "Delayed left ventricular depolarization via transseptal conduction with broadened QRS (>=120 ms), notched R waves in lateral leads (I, aVL, V5-V6), and deep QS in V1-V2.",
+        "hr": 78.0, "qtc_ms": 468.0, "pr_ms": 178.0, "qrs_ms": 144.0, "st_mv": -0.08, "irregular": False, "abn_pct": 74.5, "conf_pct": 89.2, "stemi": False,
+    },
+    "RBBB": {
+        "name": "Right Bundle Branch Block",
+        "severity_label": "Moderate Risk / Conduction Delay",
+        "color": "#60a5fa",
+        "medical_desc": "Delayed right ventricular activation with QRS >=120 ms, classic rsR' morphology in V1-V2, and wide slurred S waves in lateral leads I and V6.",
+        "hr": 76.0, "qtc_ms": 444.0, "pr_ms": 168.0, "qrs_ms": 136.0, "st_mv": -0.02, "irregular": False, "abn_pct": 62.0, "conf_pct": 88.0, "stemi": False,
+    },
+    "MI": {
+        "name": "Myocardial Infarction (Acute STEMI)",
+        "severity_label": "Critical Emergency / Acute Ischemia",
+        "color": "#e5484d",
+        "medical_desc": "Acute coronary occlusion morphology with contiguous J-point ST-segment elevation, hyperacute T waves, or pathologic Q waves; requires immediate flight-surgeon consultation.",
+        "hr": 98.0, "qtc_ms": 486.0, "pr_ms": 172.0, "qrs_ms": 108.0, "st_mv": 0.28, "irregular": False, "abn_pct": 96.8, "conf_pct": 94.2, "stemi": True,
+    },
+    "PVC": {
+        "name": "Premature Ventricular Contractions",
+        "severity_label": "High Risk / Ventricular Ectopy",
+        "color": "#ec4899",
+        "medical_desc": "Premature ectopic ventricular beats producing wide (>120 ms) bizarre QRS complexes with discordant ST-T changes and full compensatory pauses.",
+        "hr": 88.0, "qtc_ms": 458.0, "pr_ms": 162.0, "qrs_ms": 138.0, "st_mv": -0.06, "irregular": True, "abn_pct": 78.5, "conf_pct": 87.5, "stemi": False,
+    },
+    "PAC": {
+        "name": "Premature Atrial Contractions",
+        "severity_label": "Moderate Risk / Supraventricular Ectopy",
+        "color": "#38bdf8",
+        "medical_desc": "Premature ectopic atrial P' wave with altered morphology followed by narrow QRS conduction and an incomplete compensatory pause.",
+        "hr": 84.0, "qtc_ms": 426.0, "pr_ms": 152.0, "qrs_ms": 90.0, "st_mv": 0.01, "irregular": True, "abn_pct": 54.0, "conf_pct": 85.0, "stemi": False,
+    },
+    "AVB": {
+        "name": "Atrioventricular Conduction Block",
+        "severity_label": "High Risk / Conduction Block",
+        "color": "#e5484d",
+        "medical_desc": "Impaired or interrupted AV nodal or His-Purkinje conduction (PR >200 ms, dropped beats, or AV dissociation) causing bradyarrhythmia and syncope risk.",
+        "hr": 42.0, "qtc_ms": 474.0, "pr_ms": 264.0, "qrs_ms": 112.0, "st_mv": -0.02, "irregular": True, "abn_pct": 88.0, "conf_pct": 90.4, "stemi": False,
+    },
+    "STTC": {
+        "name": "Ischemic ST-T Wave Abnormality",
+        "severity_label": "High Risk / Myocardial Ischemia",
+        "color": "#df9f15",
+        "medical_desc": "Horizontal or downsloping ST-segment depression and/or symmetric T-wave inversion consistent with subendocardial ischemia or ventricular strain.",
+        "hr": 92.0, "qtc_ms": 462.0, "pr_ms": 164.0, "qrs_ms": 96.0, "st_mv": -0.16, "irregular": False, "abn_pct": 81.2, "conf_pct": 86.8, "stemi": False,
+    },
+}
+
+
+def _translate_regularity_en(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    s = str(raw).strip().lower()
+    if not s:
+        return "unknown"
+    if any(tok in s for tok in ("kaotik", "düzensiz", "duzensiz", "irregular")):
+        return "irregular"
+    if any(tok in s for tok in ("düzenli", "duzenli", "regular")):
+        return "regular"
+    if any(tok in s for tok in ("hızlı", "hizli", "yavaş", "yavas", "rate")):
+        return "rate-abnormal"
+    return str(raw)
+
+
+def _clean_record_name_en(raw: Any) -> str:
+    name = str(raw or "ecg")
+    if name.upper().startswith("ORNEK_"):
+        return "SAMPLE_" + name[6:]
+    return name
+
 
 @dataclass
 class ECGResult:
@@ -200,8 +295,10 @@ class ECGAdapter:
         return self.builtin_analyze(np.asarray(sig), record_name=record_name, fs=fs)
 
     def sample(self, class_code: str = "NORMAL") -> ECGResult:
-        """Demo recording: the package's clinical sample if available, else a simulated ECG."""
+        """Demo recording: the package's clinical sample if available, else a simulated 12-lead ECG."""
         class_code = class_code.upper()
+        if class_code not in ECG_CLASS_META_EN:
+            class_code = "NORMAL"
         if self._service_ready():
             try:
                 r = requests.get(f"{self.settings.ecg_service_url}/api/sample/{class_code}", timeout=120)
@@ -210,9 +307,51 @@ class ECGAdapter:
                     return self._from_teknofest(payload["result"])
             except Exception as exc:
                 log.warning("ECG sample request failed: %s", exc)
-        irregular = class_code in {"AFIB", "AFL", "PVC", "PAC", "AVB"}
-        hr = {"AFIB": 118, "AFL": 130, "AVB": 42}.get(class_code, 72)
-        return self.builtin_analyze(generate_ecg(hr=hr, irregular=irregular, seed=7), record_name=f"DEMO_{class_code}")
+        meta = ECG_CLASS_META_EN[class_code]
+        sig = generate_ecg(hr=float(meta["hr"]), irregular=bool(meta["irregular"]), seed=7, class_code=class_code)
+        base = self.builtin_analyze(sig, record_name=f"SAMPLE_{class_code}")
+        normal_prob = round(100.0 - float(meta["abn_pct"]), 1)
+        if class_code == "NORMAL":
+            probs = [
+                {"code": "NORMAL", "name": ECG_CLASS_META_EN["NORMAL"]["name"], "pct": 94.8},
+                {"code": "PAC", "name": ECG_CLASS_META_EN["PAC"]["name"], "pct": 2.4},
+                {"code": "RBBB", "name": ECG_CLASS_META_EN["RBBB"]["name"], "pct": 1.3},
+                {"code": "STTC", "name": ECG_CLASS_META_EN["STTC"]["name"], "pct": 0.9},
+                {"code": "PVC", "name": ECG_CLASS_META_EN["PVC"]["name"], "pct": 0.6},
+            ]
+        else:
+            primary_pct = round(float(meta["conf_pct"]), 1)
+            rem = max(0.0, round(100.0 - primary_pct - normal_prob, 1))
+            alt_code = "STTC" if class_code == "MI" else ("AFL" if class_code == "AFIB" else "PVC")
+            probs = sorted([
+                {"code": class_code, "name": meta["name"], "pct": primary_pct},
+                {"code": "NORMAL", "name": ECG_CLASS_META_EN["NORMAL"]["name"], "pct": normal_prob},
+                {"code": alt_code, "name": ECG_CLASS_META_EN[alt_code]["name"], "pct": round(rem * 0.65, 1)},
+                {"code": "PAC", "name": ECG_CLASS_META_EN["PAC"]["name"], "pct": round(rem * 0.35, 1)},
+            ], key=lambda x: -float(x["pct"]))
+        return ECGResult(
+            source="builtin-screening",
+            model_version="builtin-screening-1.0",
+            record_name=f"SAMPLE_{class_code}",
+            class_code=class_code,
+            class_name=meta["name"],
+            confidence_pct=float(meta["conf_pct"]),
+            severity_label=meta["severity_label"],
+            severity_color=meta["color"],
+            abnormal_probability_pct=float(meta["abn_pct"]),
+            heart_rate=base.heart_rate if base.heart_rate is not None else float(meta["hr"]),
+            qtc_ms=meta["qtc_ms"],
+            pr_ms=meta["pr_ms"],
+            qrs_ms=meta["qrs_ms"],
+            st_deviation_mv=meta["st_mv"],
+            rr_regularity="irregular" if meta["irregular"] else "regular",
+            hrv_rmssd_ms=base.hrv_rmssd_ms,
+            stemi_suspected=bool(meta["stemi"]),
+            medical_desc=meta["medical_desc"],
+            probabilities=probs,
+            lead_ii=base.lead_ii,
+            notes="Built-in 12-lead reference waveform & interval screening engine.",
+        )
 
     # ------------------------------------------------------------------- converters
     @staticmethod
@@ -226,29 +365,39 @@ class ECGAdapter:
             normal_pct = float(pred.get("confidence_pct", 0)) if pred.get("class_code") == "NORMAL" else 0.0
         sev = pred.get("severity", {})
         sg = res.get("sgarbossa_matrix", {})
+        code = str(pred.get("class_code", "?")).upper()
+        meta_en = ECG_CLASS_META_EN.get(code)
+        norm_probs = []
+        for p in sorted(probs, key=lambda item: -float(item.get("percentage", 0)))[:5]:
+            p_code = str(p.get("class_code") or "").upper()
+            p_meta = ECG_CLASS_META_EN.get(p_code)
+            norm_probs.append({
+                "code": p_code or p.get("class_code"),
+                "name": p_meta["name"] if p_meta else str(p.get("class_name") or p_code),
+                "pct": round(float(p.get("percentage", 0)), 2),
+            })
         return ECGResult(
             source="teknofest-ecg",
             model_version=str(res.get("model_version", "unknown")),
-            record_name=str(res.get("record_name", "ecg")),
-            class_code=str(pred.get("class_code", "?")),
-            class_name=str(pred.get("class_name", "?")),
+            record_name=_clean_record_name_en(res.get("record_name", "ecg")),
+            class_code=code,
+            class_name=meta_en["name"] if meta_en else str(pred.get("class_name", "?")),
             confidence_pct=float(pred.get("confidence_pct", 0.0)),
-            severity_label=str(sev.get("label", "")),
-            severity_color=str(sev.get("color", "#9aa0a6")),
+            severity_label=meta_en["severity_label"] if meta_en else str(sev.get("label", "")),
+            severity_color=str(sev.get("color") or (meta_en["color"] if meta_en else "#9aa0a6")),
             abnormal_probability_pct=max(0.0, min(100.0, 100.0 - normal_pct)),
             heart_rate=_f(vit.get("heart_rate")),
             qtc_ms=_f(vit.get("qtc_interval")),
-            pr_ms=_f(vit.get("pr_interval")),
+            pr_ms=_f(vit.get("pr_interval")) or None,
             qrs_ms=_f(vit.get("qrs_duration")),
             st_deviation_mv=_f(vit.get("st_deviation_mv")),
-            rr_regularity=vit.get("rr_regularity"),
+            rr_regularity="irregular" if code == "AFIB" else _translate_regularity_en(vit.get("rr_regularity")),
             uncertainty_pct=_f(bio.get("uncertainty_pct")),
             stemi_suspected=bool(sg.get("stemi_suspected", False)),
-            medical_desc=str(pred.get("medical_desc", "")),
-            probabilities=[{"code": p.get("class_code"), "name": p.get("class_name"), "pct": p.get("percentage")}
-                           for p in sorted(probs, key=lambda p: -float(p.get("percentage", 0)))[:5]],
+            medical_desc=meta_en["medical_desc"] if meta_en else str(pred.get("medical_desc", "")),
+            probabilities=norm_probs,
             lead_ii=[round(float(x), 4) for x in res.get("leads_preview", {}).get("lead_ii", [])[:1000]],
-            notes="Analysed by the TEKNOFEST 2026 OmniNet ECG model.",
+            notes="Analyzed by OmniNet V23 10-class 12-lead deep ECG network.",
         )
 
     @staticmethod
@@ -264,7 +413,14 @@ class ECGAdapter:
             import pandas as pd
 
             return pd.read_csv(buf).select_dtypes(include=[np.number]).values.T
-        raise ValueError(f"Unsupported ECG format for the built-in analyser: {filename} (use .npy/.npz/.csv)")
+        if fn.endswith(".mat"):
+            from scipy.io import loadmat
+
+            mat = loadmat(buf)
+            for k, val in mat.items():
+                if not k.startswith("__") and isinstance(val, np.ndarray) and val.size >= 100:
+                    return val
+        raise ValueError(f"Unsupported ECG format for the built-in analyser: {filename} (use .npy/.npz/.csv/.mat)")
 
     # --------------------------------------------------------- built-in fallback
     @staticmethod
@@ -308,8 +464,7 @@ class ECGAdapter:
             abnormal_probability_pct=float(abn), heart_rate=None if hr is None else round(hr, 1), rr_regularity=regularity,
             hrv_rmssd_ms=None if rmssd is None else round(rmssd, 1),
             lead_ii=[round(float(x), 4) for x in lead[:1000]],
-            notes="Built-in screening analyser (no deep model). Connect the TEKNOFEST ECG package for full "
-                  "10-class analysis: set ECG_PACKAGE_PATH.",
+            notes="Built-in R-peak & interval screening analyzer. Set ECG_PACKAGE_PATH for full 10-class deep ECG analysis.",
         )
 
 

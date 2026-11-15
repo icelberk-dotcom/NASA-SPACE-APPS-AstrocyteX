@@ -66,6 +66,7 @@
     values: {},
     sensorSeries: null,
     ecgResult: null,
+    ecgActiveSample: "NORMAL",
     voiceResult: null,
     voiceSex: "female",
     voiceActiveSample: "calm_regulated",
@@ -1994,12 +1995,42 @@
     await runAssessment();
   }
 
-  async function loadEcgSample(cls) {
+  function formatEcgEngineLabel(rawSourceOrMode) {
+    const s = String(rawSourceOrMode || "").toLowerCase();
+    if (s.includes("starts on first use")) return "OmniNet V23 Deep 12-Lead (Standby)";
+    if (s.includes("teknofest") || s.includes("omninet")) return "OmniNet V23 Deep 12-Lead";
+    if (s.includes("builtin")) return "Built-in 12-Lead Screening";
+    return rawSourceOrMode || "12-Lead Ready";
+  }
+
+  function formatEcgRhythmEn(rawReg) {
+    const s = String(rawReg || "").toLowerCase();
+    if (!s || s === "unknown") return "Undetermined";
+    if (s.includes("irregular") || s.includes("kaotik") || s.includes("duzensiz") || s.includes("düzensiz")) return "Irregular";
+    if (s.includes("regular") || s.includes("duzenli") || s.includes("düzenli")) return "Regular";
+    if (s.includes("rate")) return "Rate-Abnormal";
+    return String(rawReg);
+  }
+
+  async function loadEcgSample(cls, autoSync = false) {
+    state.ecgActiveSample = cls;
+    document.querySelectorAll("#ecgSampleBtns .chip-btn").forEach((b) =>
+      b.classList.toggle("active", b.dataset.ecg === cls)
+    );
     const res = await fetch(`/ecg/sample/${encodeURIComponent(cls)}`);
     if (!res.ok) return;
     state.ecgResult = await res.json();
+    const badge = document.getElementById("ecgModeBadge");
+    if (badge && state.ecgResult.source) {
+      badge.textContent = formatEcgEngineLabel(state.ecgResult.source);
+    }
     renderEcgBanner();
     drawECGCanvas();
+    if (autoSync) {
+      Object.entries(state.ecgResult.parameter_values || {}).forEach(([k, v]) => setParamValue(k, v));
+      await runAssessment(true);
+      showToast(`ECG integrated: ${state.ecgResult.class_code} — ${state.ecgResult.class_name}`);
+    }
   }
 
   function renderEcgBanner() {
@@ -2007,16 +2038,42 @@
     const banner = document.getElementById("ecgResultBanner");
     const probsEl = document.getElementById("ecgProbBars");
     if (!ecg) { banner.innerHTML = ""; probsEl.innerHTML = ""; return; }
+
+    const engineLbl = formatEcgEngineLabel(ecg.source);
+    const rhythmLbl = formatEcgRhythmEn(ecg.rr_regularity);
+    const hrTxt = ecg.heart_rate !== null && ecg.heart_rate !== undefined ? `${Number(ecg.heart_rate).toFixed(1)} bpm` : "--";
+    const qtcTxt = ecg.qtc_ms ? `${Number(ecg.qtc_ms).toFixed(0)} ms` : "--";
+    const prTxt = ecg.pr_ms ? `${Number(ecg.pr_ms).toFixed(0)} ms` : "--";
+    const qrsTxt = ecg.qrs_ms ? `${Number(ecg.qrs_ms).toFixed(0)} ms` : "--";
+    const stTxt = ecg.st_deviation_mv !== null && ecg.st_deviation_mv !== undefined
+      ? `${Number(ecg.st_deviation_mv) >= 0 ? "+" : ""}${Number(ecg.st_deviation_mv).toFixed(2)} mV`
+      : "--";
+    const stemiChip = ecg.stemi_suspected
+      ? `<span class="menu-badge" style="margin-left:8px;background:rgba(229,72,77,0.22);border-color:#e5484d;color:#fecdd3;">STEMI Suspected</span>`
+      : "";
+    const sevChip = ecg.severity_label
+      ? `<span class="status-chip" style="margin-left:8px;">${escHtml(ecg.severity_label)}</span>`
+      : "";
+
     banner.innerHTML = `
-      <div class="briefing-banner row-between">
-        <div>
-          <div style="font-size:13.5px;font-weight:600;">${ecg.class_code} — ${ecg.class_name} (${ecg.source})</div>
-          <div class="mono-meta" style="margin-top:3px;">
-            HR ${(ecg.heart_rate || 0).toFixed(1)} bpm · QTc ${(ecg.qtc_ms || 0).toFixed(0)} ms ·
-            Rhythm: ${ecg.rr_regularity} · Abnormal probability: ${(ecg.abnormal_probability_pct || 0).toFixed(1)}%
+      <div class="briefing-banner">
+        <div class="row-between">
+          <div>
+            <div style="font-size:13.5px;font-weight:600;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+              <span>${escHtml(ecg.class_code)} — ${escHtml(ecg.class_name)}</span>
+              <span class="mono-meta">(${escHtml(engineLbl)})</span>
+              ${sevChip}
+              ${stemiChip}
+            </div>
+            <div class="mono-meta" style="margin-top:4px;">
+              HR ${hrTxt} · QTc ${qtcTxt} · PR ${prTxt} · QRS ${qrsTxt} · ST ${stTxt} ·
+              Rhythm: ${escHtml(rhythmLbl)} · Abnormal Prob: ${Number(ecg.abnormal_probability_pct || 0).toFixed(1)}% ·
+              Confidence: ${Number(ecg.confidence_pct || 0).toFixed(1)}%
+            </div>
+            ${ecg.medical_desc ? `<div class="dim-note" style="margin-top:5px;">${escHtml(ecg.medical_desc)}</div>` : ""}
           </div>
+          <button type="button" class="btn success small" id="applyEcgNowBtn">${t("applyEcgBtn")}</button>
         </div>
-        <button type="button" class="btn success small" id="applyEcgNowBtn">${t("applyEcgBtn")}</button>
       </div>
     `;
     document.getElementById("applyEcgNowBtn").addEventListener("click", () => {
@@ -2025,7 +2082,7 @@
     });
 
     const rawProbs = Array.isArray(ecg.probabilities)
-      ? ecg.probabilities.map((p) => [p.code ? `${p.code} (${p.name || ""})` : p.name, Number(p.pct || 0)])
+      ? ecg.probabilities.map((p) => [p.code ? `${p.code} — ${p.name || ""}` : p.name, Number(p.pct || 0)])
       : Object.entries(ecg.probabilities || {}).map(([k, v]) => [k, Number(v) * 100]);
     const probs = rawProbs.slice(0, 6);
     probsEl.innerHTML = probs.length ? `<div class="grid-3">` + probs.map(([cName, pctVal]) => `
@@ -2204,10 +2261,14 @@
 
     // ECG sample buttons + upload
     const ecgClasses = ["NORMAL", "AFIB", "AFL", "LBBB", "RBBB", "MI", "PVC", "PAC", "AVB", "STTC"];
-    document.getElementById("ecgModeBadge").textContent = `ECG: ${healthMeta.ecg?.mode || "ready"}`;
+    document.getElementById("ecgModeBadge").textContent = formatEcgEngineLabel(healthMeta.ecg?.mode || "ready");
     const ecgRow = document.getElementById("ecgSampleBtns");
-    ecgRow.innerHTML = ecgClasses.map((c) => `<button type="button" class="chip-btn" data-ecg="${c}">${c}</button>`).join("");
-    ecgRow.querySelectorAll("[data-ecg]").forEach((b) => b.addEventListener("click", () => loadEcgSample(b.dataset.ecg)));
+    ecgRow.innerHTML = ecgClasses.map((c) =>
+      `<button type="button" class="chip-btn ${c === state.ecgActiveSample ? "active" : ""}" data-ecg="${c}">${c}</button>`
+    ).join("");
+    ecgRow.querySelectorAll("[data-ecg]").forEach((b) =>
+      b.addEventListener("click", () => loadEcgSample(b.dataset.ecg, true))
+    );
 
     document.getElementById("ecgFileInput").addEventListener("change", async (e) => {
       const f = e.target.files[0];
@@ -2215,12 +2276,18 @@
       const fd = new FormData();
       fd.append("file", f);
       const res = await fetch("/ecg/analyze", { method: "POST", body: fd });
-      if (res.ok) {
-        state.ecgResult = await res.json();
-        renderEcgBanner();
-        drawECGCanvas();
-        showToast(`ECG analyzed: ${state.ecgResult.class_code}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+        showToast("ECG upload error: " + (err.detail || res.status));
+        return;
       }
+      state.ecgResult = await res.json();
+      document.querySelectorAll("#ecgSampleBtns .chip-btn").forEach((b) => b.classList.remove("active"));
+      renderEcgBanner();
+      drawECGCanvas();
+      Object.entries(state.ecgResult.parameter_values || {}).forEach(([k, v]) => setParamValue(k, v));
+      await runAssessment(true);
+      showToast(`ECG analyzed & integrated: ${state.ecgResult.class_code} — ${state.ecgResult.class_name}`);
     });
 
     // Role-Adaptive Advisor Chat
