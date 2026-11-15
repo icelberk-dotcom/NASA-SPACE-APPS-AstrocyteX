@@ -3,7 +3,7 @@ ECG Integration Adapter.
 
 Connects AstroGuard-X to the 12-lead ECG analyser built for TEKNOFEST 2026 (team
 Ayyildiz_AI, "OmniNet Apex-Titan" V23 - 10-class cardiac rhythm / ischaemia classifier
-with a Flask front-end that was created with Antigravity).
+with a Flask front-end).
 
 The adapter keeps that package *untouched* and talks to it through its own HTTP API::
 
