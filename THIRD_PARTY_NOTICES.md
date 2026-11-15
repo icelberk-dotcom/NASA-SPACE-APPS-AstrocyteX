@@ -55,9 +55,9 @@
 26. F. Pedregosa et al., "Scikit-learn: Machine Learning in Python," *Journal of Machine Learning Research*, vol. 12, pp. 2825-2830, 2011.
 27. C. R. Harris et al., "Array programming with NumPy," *Nature*, vol. 585, pp. 357-362, 2020; P. Virtanen et al., "SciPy 1.0: Fundamental Algorithms for Scientific Computing in Python," *Nature Methods*, vol. 17, pp. 261-272, 2020; J. D. Hunter, "Matplotlib: A 2D Graphics Environment," *Computing in Science & Engineering*, vol. 9, no. 3, pp. 90-95, 2007.
 
-## TEKNOFEST ECG analyser (external local package)
+## ECG analyser (external local package)
 
-`backend/ecg_adapter.py` interfaces with the **TEKNOFEST 2026 ECG AI system (team Ayyildiz_AI, "OmniNet Apex-Titan" V23)** via `ECG_PACKAGE_PATH` without redistributing its 138 MB checkpoint weights. When absent, the built-in screening fallback (`builtin-screening`) provides offline R-peak, HR, and HRV estimation.
+`backend/ecg_adapter.py` interfaces with the **ECG AI system (team Ayyildiz_AI, "OmniNet Apex-Titan" V23)** via `ECG_PACKAGE_PATH` without redistributing its 138 MB checkpoint weights. When absent, the built-in screening fallback (`builtin-screening`) provides offline R-peak, HR, and HRV estimation.
 
 ## NASA notice
 
