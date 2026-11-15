@@ -6,8 +6,6 @@
 
 > **Disclaimer — Research & demonstration software (not a medical device).** Reference ranges are illustrative, neural networks are trained on simulated spaceflight cohorts, and space-physiology constants are not clinically validated. Never use this software for real clinical diagnosis or treatment.
 
----
-
 ## Key Capabilities (v3.0)
 
 | Subsystem | Technical Specification |
