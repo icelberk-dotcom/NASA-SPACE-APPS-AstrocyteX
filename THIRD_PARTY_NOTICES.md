@@ -1,6 +1,6 @@
 # Third-party software, libraries & academic attributions
 
-**AstrocyteX (v3.0)** builds on open-source software packages and peer-reviewed machine learning, signal processing, and aerospace-medicine literature. All libraries are invoked unmodified through their public APIs. Licences listed below correspond to upstream project declarations.
+**AstrocyteX** builds on open-source software packages and peer-reviewed machine learning, signal processing, and aerospace-medicine literature. All libraries are invoked unmodified through their public APIs. Licences listed below correspond to upstream project declarations.
 
 ## Software libraries & runtimes
 
