@@ -141,6 +141,34 @@ def test_voice_and_role_endpoints_over_http(client):
     assert all(not is_turkish_text(t["title"]) and not is_turkish_text(t["description"]) for t in en_tasks)
 
 
+def test_health_history_recording_and_management(client):
+    home = client.get("/").text
+    assert 'data-page="health-history"' in home
+    assert 'id="healthHistoryColCanvas"' in home
+    assert 'id="healthHistoryTable"' in home
+
+    b1 = {"values": DEFAULT_VALUES, "subjective_log": "Morning baseline", "mission_day": 45}
+    b2 = {"values": {**DEFAULT_VALUES, **scenario_preset("dehydration")}, "subjective_log": "Post-EVA check", "mission_day": 46}
+    assert client.post("/astronauts/hslot/assess", json=b1).status_code == 200
+    assert client.post("/astronauts/hslot/assess", json=b2).status_code == 200
+
+    hist = client.get("/astronauts/hslot/history").json()
+    assert len(hist) == 2
+    assert hist[0]["mission_day"] == 45.0 and hist[0]["subjective_log"] == "Morning baseline"
+    assert hist[1]["mission_day"] == 46.0 and hist[1]["subjective_log"] == "Post-EVA check"
+    assert hist[1]["overall_risk_pct"] > hist[0]["overall_risk_pct"]
+    assert "heart_rate" in hist[1]["vitals"] and hist[1]["systems"] and hist[1]["top_risks"]
+
+    del_one = client.delete(f"/astronauts/hslot/history/{hist[0]['id']}")
+    assert del_one.status_code == 200 and del_one.json()["deleted"] is True
+    assert client.delete("/astronauts/hslot/history/999999").status_code == 404
+    assert len(client.get("/astronauts/hslot/history").json()) == 1
+
+    clr = client.delete("/astronauts/hslot/history")
+    assert clr.status_code == 200 and clr.json()["cleared"] == 1
+    assert client.get("/astronauts/hslot/history").json() == []
+
+
 def test_zero_emojis_across_application_codebase():
     import pathlib
     import re

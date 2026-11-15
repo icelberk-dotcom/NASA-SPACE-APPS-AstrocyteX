@@ -90,16 +90,75 @@ class Storage:
         return json.loads(row["assessment_json"]) if row else None
 
     def risk_history(self, astronaut_id: str, n: int = 60) -> List[Dict[str, Any]]:
-        """Overall risk over time (for the trend chart)."""
+        """Chronological health history snapshots with overall, domain, system, and vital summaries."""
         with self._conn() as c:
-            rows = c.execute("SELECT ts, assessment_json FROM readings WHERE astronaut_id=? AND assessment_json IS NOT NULL "
-                             "ORDER BY id DESC LIMIT ?", (astronaut_id, n)).fetchall()
-        out = []
+            rows = c.execute(
+                "SELECT id, ts, values_json, assessment_json FROM readings "
+                "WHERE astronaut_id=? AND assessment_json IS NOT NULL ORDER BY id DESC LIMIT ?",
+                (astronaut_id, n),
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
         for r in reversed(rows):
             a = json.loads(r["assessment_json"])
-            out.append({"ts": r["ts"], "overall_risk_pct": a["overall"]["risk_pct"],
-                        "level": a["overall"]["level"]})
+            vals = json.loads(r["values_json"]) if r["values_json"] else {}
+            ov = a.get("overall") or {}
+            env = a.get("environment") or {}
+            adv = a.get("advisor") or {}
+            phys = a.get("physics") or {}
+            params = a.get("parameters") or []
+            risky_params = [
+                {
+                    "key": p.get("key", ""),
+                    "name": p.get("name", p.get("key", "")),
+                    "risk_pct": p.get("risk_pct", 0.0),
+                    "level": p.get("level", "gray"),
+                }
+                for p in sorted(params, key=lambda x: -(x.get("risk_pct") or 0.0))
+                if p.get("level") in ("yellow", "red", "black") and p.get("kind") != "environment"
+            ][:3]
+            systems_summary = {
+                cat: round(float(s.get("risk_pct", 0.0)), 1)
+                for cat, s in (a.get("systems") or {}).items()
+                if isinstance(s, dict)
+            }
+            out.append({
+                "id": int(r["id"]),
+                "ts": r["ts"],
+                "mission_day": float(a.get("mission_day", phys.get("mission_day", 0.0)) or 0.0),
+                "overall_risk_pct": ov.get("risk_pct", 0.0),
+                "physiological_risk_pct": ov.get("physiological_risk_pct", ov.get("risk_pct", 0.0)),
+                "level": ov.get("level", "gray"),
+                "n_at_risk": int(ov.get("n_at_risk", 0)),
+                "voice_risk_pct": ov.get("voice_risk_pct"),
+                "voice_state": ov.get("voice_state"),
+                "env_hazard_pct": env.get("hazard_index_pct"),
+                "env_level": env.get("level"),
+                "user_role": adv.get("user_role", "non_doctor"),
+                "subjective_log": a.get("subjective_log", ""),
+                "systems": systems_summary,
+                "top_risks": risky_params,
+                "vitals": {
+                    "heart_rate": vals.get("heart_rate"),
+                    "spo2": vals.get("spo2"),
+                    "systolic_bp": vals.get("systolic_bp"),
+                    "diastolic_bp": vals.get("diastolic_bp"),
+                    "body_temp": vals.get("body_temp"),
+                    "sleep_hours": vals.get("sleep_hours"),
+                    "radiation_dose_msv_d": vals.get("radiation_dose_msv_d"),
+                    "cabin_co2_mmhg": vals.get("cabin_co2_mmhg"),
+                },
+            })
         return out
+
+    def delete_reading(self, astronaut_id: str, reading_id: int) -> bool:
+        with self._conn() as c:
+            cur = c.execute("DELETE FROM readings WHERE id=? AND astronaut_id=?", (reading_id, astronaut_id))
+            return cur.rowcount == 1
+
+    def clear_readings(self, astronaut_id: str) -> int:
+        with self._conn() as c:
+            cur = c.execute("DELETE FROM readings WHERE astronaut_id=?", (astronaut_id,))
+            return int(cur.rowcount)
 
     # ------------------------------------------------------------------- tasks
     def add_task(self, astronaut_id: str, t: Dict[str, Any]) -> int:

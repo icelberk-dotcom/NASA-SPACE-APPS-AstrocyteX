@@ -82,7 +82,18 @@
     history: [],
     healthMeta: null,
     tableFilter: "all",
+    historyColMode: "overall",
+    historyBandFilter: "all",
+    historySearch: "",
   };
+
+  function escHtml(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
 
   function t(key) {
     return (window.TRANSLATIONS.en && window.TRANSLATIONS.en[key]) || key;
@@ -216,6 +227,7 @@
     "biochemical-statistics": "Biochemistry & CBC",
     "space-radiation": "Space Environment",
     "exercise-tracker": "Exercise & Physiology",
+    "health-history": "Health History",
     diet: "Nutrition & Hydration",
     "diet-history": "Nutrition Log",
     experiments: "Experiments",
@@ -644,6 +656,218 @@
         { label: "Health Risk %", data: pts.map((x) => x.overall_risk_pct ?? x.overall_risk ?? 0), color: "#29b377" },
       ], pts.map((_, i) => `#${i + 1}`), 0, 100);
     }
+
+    drawHealthHistoryColumns();
+  }
+
+  function drawHealthHistoryColumns() {
+    const canvas = document.getElementById("healthHistoryColCanvas");
+    const box = setupCanvas(canvas, Number(canvas?.getAttribute("height")) || 255);
+    if (!box) return;
+    const { c, w, h } = box;
+    const hist = state.history || [];
+
+    if (!hist.length) {
+      c.fillStyle = "rgba(158, 155, 174, 0.82)";
+      c.font = "12.5px Inter, Segoe UI, sans-serif";
+      c.fillText("No health snapshots recorded for this slot yet. Click 'Record Health Snapshot' above.", 22, h / 2);
+      return;
+    }
+
+    const mode = state.historyColMode || "overall";
+    const pad = { l: 44, r: 18, t: 30, b: 34 };
+    const pw = w - pad.l - pad.r;
+    const ph = h - pad.t - pad.b;
+    const yMax = mode === "vitals" ? 160 : 100;
+
+    // Gridlines & Y-axis ticks
+    c.strokeStyle = "rgba(255, 255, 255, 0.065)";
+    c.fillStyle = "rgba(158, 155, 174, 0.78)";
+    c.font = "11px Consolas, monospace";
+    c.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.t + (ph * i) / 4;
+      const val = yMax - (yMax * i) / 4;
+      c.beginPath();
+      c.moveTo(pad.l, y);
+      c.lineTo(w - pad.r, y);
+      c.stroke();
+      c.fillText(val.toFixed(0), 8, y + 4);
+    }
+
+    // Risk threshold guide lines for percentage views
+    if (mode !== "vitals") {
+      const thresholds = [
+        [40, "rgba(223, 159, 21, 0.35)", "40% Caution"],
+        [70, "rgba(229, 72, 77, 0.38)", "70% High"],
+      ];
+      c.save();
+      c.setLineDash([4, 4]);
+      thresholds.forEach(([tv, col, lbl]) => {
+        const ty = pad.t + ph * (1 - tv / yMax);
+        c.strokeStyle = col;
+        c.beginPath();
+        c.moveTo(pad.l, ty);
+        c.lineTo(w - pad.r, ty);
+        c.stroke();
+        c.fillStyle = col;
+        c.font = "10px Consolas, monospace";
+        c.fillText(lbl, w - pad.r - 68, ty - 4);
+      });
+      c.restore();
+    }
+
+    const drawLegend = (items) => {
+      let lx = pad.l;
+      c.font = "11px Consolas, monospace";
+      items.forEach(([lbl, col]) => {
+        c.fillStyle = col;
+        c.fillRect(lx, 8, 10, 8);
+        c.fillStyle = "#efeff4";
+        c.fillText(lbl, lx + 14, 15);
+        lx += c.measureText(lbl).width + 30;
+      });
+    };
+
+    if (mode === "overall") {
+      drawLegend([
+        ["Nominal (<=40%)", "#29b377"],
+        ["Elevated (41-70%)", "#df9f15"],
+        ["High/Critical (>70%)", "#e5484d"],
+      ]);
+      const slice = hist.slice(-24);
+      const startIdx = hist.length - slice.length;
+      const slotW = pw / Math.max(1, slice.length);
+      const barW = Math.max(10, Math.min(38, slotW * 0.62));
+
+      slice.forEach((rec, i) => {
+        const val = Math.max(0, Math.min(100, Number(rec.overall_risk_pct ?? 0)));
+        const lv = rec.level || riskLevel(val);
+        const col = lv === "black" ? "#e5484d" : (LEVEL_COLORS[lv] || "#29b377");
+        const bh = Math.max(3, (val / yMax) * ph);
+        const x = pad.l + i * slotW + (slotW - barW) / 2;
+        const y = pad.t + ph - bh;
+
+        c.fillStyle = col;
+        c.globalAlpha = 0.86;
+        c.fillRect(x, y, barW, bh);
+        c.globalAlpha = 1.0;
+        if (lv === "black") {
+          c.fillStyle = "#f8fafc";
+          c.fillRect(x, y, barW, 3);
+        }
+
+        if (slice.length <= 18 || i % 2 === 0 || i === slice.length - 1) {
+          c.fillStyle = "#efeff4";
+          c.font = "10px Consolas, monospace";
+          const txt = `${val.toFixed(0)}%`;
+          c.fillText(txt, x + Math.max(0, (barW - c.measureText(txt).width) / 2), Math.max(25, y - 5));
+        }
+
+        if (slice.length <= 14 || i % Math.ceil(slice.length / 10) === 0 || i === slice.length - 1) {
+          const xLbl = `#${startIdx + i + 1}`;
+          c.fillStyle = "rgba(158, 155, 174, 0.86)";
+          c.font = "10.5px Consolas, monospace";
+          c.fillText(xLbl, x + Math.max(-4, (barW - c.measureText(xLbl).width) / 2), h - 12);
+        }
+      });
+    } else if (mode === "grouped") {
+      drawLegend([
+        ["Physiological %", "#29b377"],
+        ["Voice & Mood %", "#9b87f5"],
+        ["Habitat Hazard %", "#df9f15"],
+      ]);
+      const slice = hist.slice(-12);
+      const startIdx = hist.length - slice.length;
+      const slotW = pw / Math.max(1, slice.length);
+      const groupW = Math.min(48, slotW * 0.76);
+      const barW = Math.max(4, (groupW - 4) / 3);
+
+      slice.forEach((rec, i) => {
+        const vals = [
+          [Number(rec.physiological_risk_pct ?? rec.overall_risk_pct ?? 0), "#29b377"],
+          [Number(rec.voice_risk_pct ?? 0), "#9b87f5"],
+          [Number(rec.env_hazard_pct ?? 0), "#df9f15"],
+        ];
+        const gx = pad.l + i * slotW + (slotW - groupW) / 2;
+        vals.forEach(([v, col], j) => {
+          const clamped = Math.max(0, Math.min(100, v));
+          const bh = Math.max(2, (clamped / yMax) * ph);
+          c.fillStyle = col;
+          c.fillRect(gx + j * (barW + 2), pad.t + ph - bh, barW, bh);
+        });
+        const xLbl = `#${startIdx + i + 1}`;
+        c.fillStyle = "rgba(158, 155, 174, 0.86)";
+        c.font = "10.5px Consolas, monospace";
+        c.fillText(xLbl, gx + Math.max(0, (groupW - c.measureText(xLbl).width) / 2), h - 12);
+      });
+    } else if (mode === "systems") {
+      drawLegend([
+        ["History Mean %", "#9b87f5"],
+        ["Latest Snapshot %", "#29b377"],
+      ]);
+      const sysOrder = [
+        ["cardiovascular", "Cardio"],
+        ["respiratory", "Resp"],
+        ["ecg", "ECG"],
+        ["stress_thermal", "Stress"],
+        ["sleep_activity", "Sleep"],
+        ["bone_muscle", "Bone/Mus"],
+        ["hydration_renal", "Renal"],
+        ["nutrition", "Nutrit"],
+        ["hemogram", "CBC"],
+        ["biochemistry", "Biochem"],
+      ];
+      const latestSys = (hist[hist.length - 1] && hist[hist.length - 1].systems) || {};
+      const slotW = pw / sysOrder.length;
+      const groupW = Math.min(42, slotW * 0.72);
+      const barW = Math.max(6, (groupW - 3) / 2);
+
+      sysOrder.forEach(([cat, shortLbl], i) => {
+        const samples = hist
+          .map((r) => (r.systems && r.systems[cat] !== undefined ? Number(r.systems[cat]) : null))
+          .filter((v) => v !== null && !Number.isNaN(v));
+        const meanVal = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
+        const lastVal = latestSys[cat] !== undefined ? Number(latestSys[cat]) : meanVal;
+        const gx = pad.l + i * slotW + (slotW - groupW) / 2;
+
+        [[meanVal, "#9b87f5"], [lastVal, "#29b377"]].forEach(([v, col], j) => {
+          const bh = Math.max(2, (Math.max(0, Math.min(100, v)) / yMax) * ph);
+          c.fillStyle = col;
+          c.fillRect(gx + j * (barW + 3), pad.t + ph - bh, barW, bh);
+        });
+
+        c.fillStyle = "rgba(158, 155, 174, 0.88)";
+        c.font = "10px Consolas, monospace";
+        c.fillText(shortLbl, gx + Math.max(-6, (groupW - c.measureText(shortLbl).width) / 2), h - 12);
+      });
+    } else if (mode === "vitals") {
+      drawLegend([
+        ["Heart Rate (bpm)", "#e5484d"],
+        ["SpO2 (%)", "#b4a5fa"],
+      ]);
+      const slice = hist.slice(-14);
+      const startIdx = hist.length - slice.length;
+      const slotW = pw / Math.max(1, slice.length);
+      const groupW = Math.min(42, slotW * 0.74);
+      const barW = Math.max(5, (groupW - 3) / 2);
+
+      slice.forEach((rec, i) => {
+        const vit = rec.vitals || {};
+        const hr = Number(vit.heart_rate ?? 0);
+        const spo2 = Number(vit.spo2 ?? 0);
+        const gx = pad.l + i * slotW + (slotW - groupW) / 2;
+        [[hr, "#e5484d"], [spo2, "#b4a5fa"]].forEach(([v, col], j) => {
+          const bh = Math.max(2, (Math.max(0, Math.min(yMax, v)) / yMax) * ph);
+          c.fillStyle = col;
+          c.fillRect(gx + j * (barW + 3), pad.t + ph - bh, barW, bh);
+        });
+        const xLbl = `#${startIdx + i + 1}`;
+        c.fillStyle = "rgba(158, 155, 174, 0.86)";
+        c.font = "10.5px Consolas, monospace";
+        c.fillText(xLbl, gx + Math.max(0, (groupW - c.measureText(xLbl).width) / 2), h - 12);
+      });
+    }
   }
 
   /* -----------------------------------------------------------------------
@@ -978,6 +1202,15 @@
         badge.hidden = false;
       } else {
         badge.hidden = true;
+      }
+    }
+    const hBadge = document.getElementById("menuHistoryBadge");
+    if (hBadge) {
+      if (state.history && state.history.length > 0) {
+        hBadge.textContent = String(state.history.length);
+        hBadge.hidden = false;
+      } else {
+        hBadge.hidden = true;
       }
     }
   }
@@ -1406,6 +1639,147 @@
     }
   }
 
+  function renderHealthHistory() {
+    const kpiEl = document.getElementById("healthHistoryKpiStrip");
+    const tbody = document.getElementById("healthHistoryTableBody");
+    const hist = state.history || [];
+
+    if (kpiEl) {
+      if (!hist.length) {
+        kpiEl.innerHTML = `
+          <div class="kpi-cell"><div class="kpi-label"><span>Recorded Snapshots</span></div><div class="kpi-val">0</div><div class="kpi-meta">Slot ${escHtml(state.astronautId)}</div></div>
+          <div class="kpi-cell"><div class="kpi-label"><span>Latest Health Risk</span></div><div class="kpi-val">--%</div><div class="kpi-meta">No record yet</div></div>
+          <div class="kpi-cell"><div class="kpi-label"><span>Mean Recorded Risk</span></div><div class="kpi-val">--%</div><div class="kpi-meta">Chronological mean</div></div>
+          <div class="kpi-cell"><div class="kpi-label"><span>Peak Recorded Risk</span></div><div class="kpi-val">--%</div><div class="kpi-meta">Maximum observed</div></div>
+        `;
+      } else {
+        const latest = hist[hist.length - 1];
+        const prev = hist.length > 1 ? hist[hist.length - 2] : null;
+        const latestPct = Number(latest.overall_risk_pct ?? 0);
+        const latestLv = latest.level || riskLevel(latestPct);
+        const delta = prev ? latestPct - Number(prev.overall_risk_pct ?? 0) : 0;
+        const deltaTxt = prev ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}% vs prior` : "Initial baseline";
+
+        const risks = hist.map((h) => Number(h.overall_risk_pct ?? 0));
+        const meanPct = risks.reduce((a, b) => a + b, 0) / risks.length;
+        const nominalCount = hist.filter((h) => Number(h.overall_risk_pct ?? 0) <= 40).length;
+
+        let peakRec = hist[0];
+        hist.forEach((h) => {
+          if (Number(h.overall_risk_pct ?? 0) >= Number(peakRec.overall_risk_pct ?? 0)) peakRec = h;
+        });
+        const peakPct = Number(peakRec.overall_risk_pct ?? 0);
+        const peakLv = peakRec.level || riskLevel(peakPct);
+
+        kpiEl.innerHTML = `
+          <div class="kpi-cell">
+            <div class="kpi-label"><span>Recorded Snapshots</span><span class="mono-meta">${escHtml(state.astronautId)}</span></div>
+            <div class="kpi-val">${hist.length}</div>
+            <div class="kpi-meta">${nominalCount}/${hist.length} within nominal band (&lt;=40%)</div>
+          </div>
+          <div class="kpi-cell">
+            <div class="kpi-label"><span>Latest Health Risk</span><span class="risk-dot ${latestLv}"></span></div>
+            <div class="kpi-val">${latestPct.toFixed(1)}%</div>
+            <div class="kpi-meta">${deltaTxt} · Day ${Number(latest.mission_day || 0).toFixed(0)}</div>
+          </div>
+          <div class="kpi-cell">
+            <div class="kpi-label"><span>Mean Recorded Risk</span><span class="risk-dot ${riskLevel(meanPct)}"></span></div>
+            <div class="kpi-val">${meanPct.toFixed(1)}%</div>
+            <div class="kpi-meta">Across ${hist.length} persisted snapshot(s)</div>
+          </div>
+          <div class="kpi-cell">
+            <div class="kpi-label"><span>Peak Recorded Risk</span><span class="risk-dot ${peakLv}"></span></div>
+            <div class="kpi-val">${peakPct.toFixed(1)}%</div>
+            <div class="kpi-meta">${LEVEL_NAMES[peakLv] || "Baseline"} · Day ${Number(peakRec.mission_day || 0).toFixed(0)}</div>
+          </div>
+        `;
+      }
+    }
+
+    if (!tbody) return;
+    const indexed = hist.map((rec, idx) => ({ ...rec, seqNo: idx + 1 })).reverse();
+    const q = (state.historySearch || "").trim().toLowerCase();
+    const filtered = indexed.filter((rec) => {
+      const pct = Number(rec.overall_risk_pct ?? 0);
+      if (state.historyBandFilter === "elevated" && pct <= 40) return false;
+      if (!q) return true;
+      const lv = rec.level || riskLevel(pct);
+      const flags = (rec.top_risks || []).map((r) => `${r.name} ${r.key}`).join(" ");
+      const hay = `${rec.ts || ""} day ${rec.mission_day || ""} ${LEVEL_NAMES[lv] || lv} ${rec.subjective_log || ""} ${flags}`.toLowerCase();
+      return hay.includes(q);
+    });
+
+    if (!filtered.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9" class="history-empty">
+            ${hist.length ? "No health history records match the active filter." : "No health snapshots recorded yet. Click 'Record Health Snapshot' above to store an entry."}
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map((rec) => {
+      const pct = Number(rec.overall_risk_pct ?? 0);
+      const lv = rec.level || riskLevel(pct);
+      const bandName = LEVEL_NAMES[lv] || "Baseline";
+      const tsFmt = (rec.ts || "").slice(0, 19).replace("T", " ");
+      const mDay = `Day ${Number(rec.mission_day ?? 0).toFixed(0)}`;
+
+      const physPct = Number(rec.physiological_risk_pct ?? pct).toFixed(1);
+      const vTxt = rec.voice_risk_pct !== null && rec.voice_risk_pct !== undefined
+        ? `${Number(rec.voice_risk_pct).toFixed(0)}%`
+        : "--";
+      const eTxt = rec.env_hazard_pct !== null && rec.env_hazard_pct !== undefined
+        ? `${Number(rec.env_hazard_pct).toFixed(0)}%`
+        : "--";
+
+      const vit = rec.vitals || {};
+      const hrTxt = vit.heart_rate !== null && vit.heart_rate !== undefined ? `${Number(vit.heart_rate).toFixed(0)} bpm` : "--";
+      const spo2Txt = vit.spo2 !== null && vit.spo2 !== undefined ? `${Number(vit.spo2).toFixed(1)}%` : "--";
+      const bpTxt = vit.systolic_bp !== null && vit.systolic_bp !== undefined && vit.diastolic_bp !== null && vit.diastolic_bp !== undefined
+        ? `${Number(vit.systolic_bp).toFixed(0)}/${Number(vit.diastolic_bp).toFixed(0)}`
+        : "--";
+      const slpTxt = vit.sleep_hours !== null && vit.sleep_hours !== undefined ? `${Number(vit.sleep_hours).toFixed(1)}h` : "--";
+
+      const topRisks = Array.isArray(rec.top_risks) ? rec.top_risks : [];
+      const flagsHtml = topRisks.length
+        ? `<span class="mono-meta" style="margin-right:4px;">${rec.n_at_risk || topRisks.length}:</span>` +
+          topRisks.map((r) => `<span class="hh-flag-tag">${escHtml(r.name)} ${Number(r.risk_pct || 0).toFixed(0)}%</span>`).join("")
+        : `<span class="mono-meta">Nominal (0/31)</span>`;
+
+      const noteTxt = rec.subjective_log ? escHtml(rec.subjective_log) : `<span class="mono-meta">--</span>`;
+      const delBtn = rec.id !== undefined && rec.id !== null
+        ? `<button type="button" class="btn small" data-del-hist="${rec.id}">Delete</button>`
+        : "";
+
+      return `
+        <tr>
+          <td class="mono-meta">#${String(rec.seqNo).padStart(2, "0")}</td>
+          <td class="mono-meta">${escHtml(tsFmt)}</td>
+          <td class="mono-meta">${escHtml(mDay)}</td>
+          <td>
+            <span class="hh-band-chip ${lv}">
+              <span class="risk-dot ${lv}"></span>
+              <strong>${pct.toFixed(1)}%</strong>
+              <span>· ${bandName}</span>
+            </span>
+          </td>
+          <td class="hh-sub-metrics">P ${physPct}% · V ${vTxt} · H ${eTxt}</td>
+          <td class="hh-sub-metrics">${hrTxt} · ${spo2Txt} · ${bpTxt} · ${slpTxt}</td>
+          <td>${flagsHtml}</td>
+          <td class="hh-note-cell" title="${escHtml(rec.subjective_log || "")}">${noteTxt}</td>
+          <td>${delBtn}</td>
+        </tr>
+      `;
+    }).join("");
+
+    tbody.querySelectorAll("[data-del-hist]").forEach((btn) => {
+      btn.addEventListener("click", () => deleteHealthSnapshot(Number(btn.dataset.delHist)));
+    });
+  }
+
   function renderAllScreens() {
     renderHUD();
     renderHome();
@@ -1413,6 +1787,7 @@
     renderVoiceStudio();
     renderCategoryInputScreens();
     renderProgressAndRewards();
+    renderHealthHistory();
     redrawVisibleCanvases();
   }
 
@@ -1488,6 +1863,94 @@
       msg += " · Milestone: " + out.new_badges.map((b) => b.name).join(", ");
     }
     showToast(msg);
+  }
+
+  async function deleteHealthSnapshot(readingId) {
+    const aid = encodeURIComponent(state.astronautId);
+    const res = await fetch(`/astronauts/${aid}/history/${readingId}`, { method: "DELETE" });
+    if (!res.ok) return;
+    await refreshTasksAndGamification();
+    renderAllScreens();
+    showToast(`Deleted health snapshot #${readingId}.`);
+  }
+
+  async function clearHealthHistory() {
+    if (!state.history || !state.history.length) {
+      showToast("Health history is already empty.");
+      return;
+    }
+    const aid = encodeURIComponent(state.astronautId);
+    const res = await fetch(`/astronauts/${aid}/history`, { method: "DELETE" });
+    if (!res.ok) return;
+    const out = await res.json();
+    await refreshTasksAndGamification();
+    renderAllScreens();
+    showToast(`Cleared ${out.cleared || 0} recorded health snapshot(s).`);
+  }
+
+  function exportHealthHistoryCsv() {
+    const hist = state.history || [];
+    if (!hist.length) {
+      showToast("No recorded health history to export.");
+      return;
+    }
+    const csvCell = (v) => {
+      const s = String(v ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = [
+      "record_no",
+      "id",
+      "timestamp_utc",
+      "mission_day",
+      "overall_risk_pct",
+      "risk_band",
+      "physiological_risk_pct",
+      "voice_risk_pct",
+      "habitat_hazard_pct",
+      "n_off_nominal",
+      "heart_rate_bpm",
+      "spo2_pct",
+      "systolic_bp_mmhg",
+      "diastolic_bp_mmhg",
+      "sleep_hours",
+      "flagged_biomarkers",
+      "note",
+    ];
+    const lines = [headers.join(",")];
+    hist.forEach((r, idx) => {
+      const vit = r.vitals || {};
+      const flags = (r.top_risks || []).map((tItem) => `${tItem.name} (${tItem.risk_pct}%)`).join("; ");
+      lines.push([
+        idx + 1,
+        r.id ?? "",
+        r.ts ?? "",
+        r.mission_day ?? 0,
+        r.overall_risk_pct ?? 0,
+        LEVEL_NAMES[r.level || riskLevel(r.overall_risk_pct)] || r.level || "",
+        r.physiological_risk_pct ?? "",
+        r.voice_risk_pct ?? "",
+        r.env_hazard_pct ?? "",
+        r.n_at_risk ?? 0,
+        vit.heart_rate ?? "",
+        vit.spo2 ?? "",
+        vit.systolic_bp ?? "",
+        vit.diastolic_bp ?? "",
+        vit.sleep_hours ?? "",
+        flags,
+        r.subjective_log ?? "",
+      ].map(csvCell).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `astrocytex_health_history_${state.astronautId}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${hist.length} health history record(s) to CSV.`);
   }
 
   async function applyMissionProfile(profileName) {
@@ -1791,6 +2254,74 @@
       const rBadge = res.role === "doctor" ? "Clinical Mode" : "Standard Mode";
       addBubble("ai", `[${res.source} · ${rBadge}] ${res.answer}`);
     });
+
+    // Recorded Health History & Column Analytics controls
+    const snapNoteInp = document.getElementById("healthSnapshotNoteInput");
+    document.querySelectorAll("#historyNotePresetChips [data-hnote]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (snapNoteInp) snapNoteInp.value = btn.dataset.hnote;
+      });
+    });
+
+    const recSnapBtn = document.getElementById("recordHealthSnapshotBtn");
+    if (recSnapBtn) {
+      recSnapBtn.addEventListener("click", async () => {
+        recSnapBtn.disabled = true;
+        const customNote = snapNoteInp ? snapNoteInp.value.trim() : "";
+        const prevLog = state.subjectiveLog;
+        if (customNote) {
+          state.subjectiveLog = prevLog ? `${customNote} — ${prevLog}` : customNote;
+        }
+        try {
+          await runAssessment(true);
+          if (snapNoteInp) snapNoteInp.value = "";
+          const count = (state.history || []).length;
+          const pct = state.assessment?.overall?.risk_pct ?? 0;
+          showToast(`Recorded health snapshot #${count} (${Number(pct).toFixed(1)}%)`);
+        } finally {
+          state.subjectiveLog = prevLog;
+          recSnapBtn.disabled = false;
+        }
+      });
+    }
+
+    document.querySelectorAll("#historyColModeChips [data-hcol-mode]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.historyColMode = btn.dataset.hcolMode;
+        document.querySelectorAll("#historyColModeChips [data-hcol-mode]").forEach((b) =>
+          b.classList.toggle("active", b.dataset.hcolMode === state.historyColMode)
+        );
+        drawHealthHistoryColumns();
+      });
+    });
+
+    document.querySelectorAll("#historyBandFilterChips [data-hband]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.historyBandFilter = btn.dataset.hband;
+        document.querySelectorAll("#historyBandFilterChips [data-hband]").forEach((b) =>
+          b.classList.toggle("active", b.dataset.hband === state.historyBandFilter)
+        );
+        renderHealthHistory();
+      });
+    });
+
+    const histSearchInp = document.getElementById("healthHistorySearch");
+    if (histSearchInp) {
+      histSearchInp.addEventListener("input", () => {
+        state.historySearch = histSearchInp.value;
+        renderHealthHistory();
+      });
+    }
+
+    const expHistBtn = document.getElementById("exportHealthHistoryBtn");
+    if (expHistBtn) {
+      expHistBtn.addEventListener("click", exportHealthHistoryCsv);
+    }
+
+    const clrHistBtn = document.getElementById("clearHealthHistoryBtn");
+    if (clrHistBtn) {
+      clrHistBtn.addEventListener("click", clearHealthHistory);
+    }
 
     applyStaticTranslations();
     showPage(location.hash.slice(1) || "home");

@@ -185,6 +185,19 @@ def history(astronaut_id: str, n: int = Query(60, ge=1, le=500)) -> List[Dict[st
     return svc().risk_history(astronaut_id, n)
 
 
+@app.delete("/astronauts/{astronaut_id}/history/{reading_id}", tags=["assessment"])
+def delete_history_item(astronaut_id: str, reading_id: int) -> Dict[str, Any]:
+    if not svc().delete_history_entry(astronaut_id, reading_id):
+        raise HTTPException(status_code=404, detail=f"History record {reading_id} not found")
+    return {"deleted": True, "id": reading_id}
+
+
+@app.delete("/astronauts/{astronaut_id}/history", tags=["assessment"])
+def clear_history_items(astronaut_id: str) -> Dict[str, Any]:
+    cleared = svc().clear_history(astronaut_id)
+    return {"cleared": cleared}
+
+
 @app.post("/astronauts/{astronaut_id}/chat", tags=["assessment"])
 def chat(astronaut_id: str, body: ChatIn, lang: str = Query("en", pattern="^(en|tr)$")) -> Dict[str, str]:
     return svc().chat(astronaut_id, body.question, lang, role=body.role)

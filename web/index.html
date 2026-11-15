@@ -39,6 +39,12 @@
 
         <div class="nav-section-label">Operations &amp; Logs</div>
         <ul class="menu-list">
+          <li>
+            <button type="button" data-page="health-history">
+              <span data-i18n="healthHistoryNav">Health History</span>
+              <span class="menu-badge" id="menuHistoryBadge" hidden>0</span>
+            </button>
+          </li>
           <li><button type="button" data-page="diet">Nutrition &amp; Hydration</button></li>
           <li><button type="button" data-page="diet-history">Nutrition Log</button></li>
           <li><button type="button" data-page="experiments">Experiments</button></li>
@@ -666,7 +672,10 @@
           <div class="screen-container">
             <div class="grid-2">
               <div class="glass-card">
-                <h3 class="card-title"><span data-i18n="historyChart">Assessment Risk History (%)</span></h3>
+                <h3 class="card-title">
+                  <span data-i18n="historyChart">Assessment Risk History (%)</span>
+                  <button type="button" class="btn small" data-nav-target="health-history">Health History Log</button>
+                </h3>
                 <canvas class="chart-canvas" id="historyCanvas" height="210"></canvas>
               </div>
               <div class="glass-card">
@@ -732,6 +741,88 @@
             <div class="glass-card">
               <h3 class="card-title"><span data-i18n="badgesTitle">Operational Milestones (18)</span></h3>
               <div class="badge-grid" id="badgesGrid"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== 13. RECORDED HEALTH HISTORY & COLUMN ANALYTICS ==================== -->
+        <section class="screen" id="health-history">
+          <div class="page-head">
+            <div>
+              <h1 class="screen-title" data-i18n="healthHistoryTitle">Recorded Health History &amp; Column Analytics</h1>
+              <p class="screen-subtitle" data-i18n="healthHistorySub">Persistent chronological health records per crew slot with risk-band column charts and structured multi-column telemetry logs.</p>
+            </div>
+            <div class="row-wrap">
+              <button type="button" class="btn small" id="exportHealthHistoryBtn" data-i18n="exportCsvBtn">Export CSV</button>
+              <button type="button" class="btn small danger" id="clearHealthHistoryBtn" data-i18n="clearHistoryBtn">Clear History</button>
+            </div>
+          </div>
+
+          <div class="screen-container">
+            <div class="glass-card health-record-bar">
+              <div class="row-between" style="margin-bottom:8px;">
+                <span class="sub-label" style="margin-bottom:0;">Record Telemetry Snapshot to Health History</span>
+                <div class="chip-row" id="historyNotePresetChips">
+                  <button type="button" class="chip-btn" data-hnote="Morning baseline check-in">Morning Baseline</button>
+                  <button type="button" class="chip-btn" data-hnote="Post-EVA physiological check">Post-EVA Check</button>
+                  <button type="button" class="chip-btn" data-hnote="Post-exercise recovery log">Exercise Recovery</button>
+                  <button type="button" class="chip-btn" data-hnote="Pre-sleep clinical snapshot">Pre-Sleep Check</button>
+                </div>
+              </div>
+              <div class="health-record-controls">
+                <input type="text" class="search-bar" id="healthSnapshotNoteInput" maxlength="240"
+                       style="margin-bottom:0;" data-i18n-placeholder="snapshotNotePlaceholder"
+                       placeholder="Optional snapshot label or clinical note (e.g. Morning baseline, Post-EVA check-in)...">
+                <button type="button" class="btn primary" id="recordHealthSnapshotBtn" data-i18n="recordSnapshotBtn">Record Health Snapshot</button>
+              </div>
+            </div>
+
+            <div class="kpi-strip" id="healthHistoryKpiStrip"></div>
+
+            <div class="glass-card">
+              <div class="card-title">
+                <span data-i18n="colChartTitle">Health History Column Chart</span>
+                <div class="chip-row" id="historyColModeChips">
+                  <button type="button" class="chip-btn active" data-hcol-mode="overall">Health Risk (%)</button>
+                  <button type="button" class="chip-btn" data-hcol-mode="grouped">Physio · Voice · Habitat</button>
+                  <button type="button" class="chip-btn" data-hcol-mode="systems">Organ System Columns</button>
+                  <button type="button" class="chip-btn" data-hcol-mode="vitals">Vitals (HR &amp; SpO2)</button>
+                </div>
+              </div>
+              <canvas class="chart-canvas" id="healthHistoryColCanvas" height="255"></canvas>
+            </div>
+
+            <div class="glass-card">
+              <div class="card-title">
+                <span data-i18n="historyTableTitle">Recorded Health History Table</span>
+                <div class="row-wrap">
+                  <div class="chip-row" id="historyBandFilterChips">
+                    <button type="button" class="chip-btn active" data-hband="all">All Records</button>
+                    <button type="button" class="chip-btn" data-hband="elevated">Elevated / Critical (&gt;=40%)</button>
+                  </div>
+                </div>
+              </div>
+              <input type="search" class="search-bar" id="healthHistorySearch" autocomplete="off"
+                     data-i18n-placeholder="historySearchPlaceholder"
+                     placeholder="Filter records by note, flagged biomarker, or risk band...">
+              <div class="table-scroll">
+                <table class="ag-data-table" id="healthHistoryTable">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Recorded (UTC)</th>
+                      <th>Mission Day</th>
+                      <th>Health Risk</th>
+                      <th>Physio / Voice / Habitat</th>
+                      <th>Key Vitals (HR · SpO2 · BP · Sleep)</th>
+                      <th>Off-Nominal Biomarkers</th>
+                      <th>Clinical / Crew Note</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="healthHistoryTableBody"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>

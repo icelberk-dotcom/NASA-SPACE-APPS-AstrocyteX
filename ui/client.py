@@ -43,6 +43,9 @@ class LocalClient:
     def history(self, aid: str) -> List[Dict[str, Any]]:
         return self.svc.risk_history(aid)
 
+    def clear_history(self, aid: str) -> Dict[str, Any]:
+        return {"cleared": self.svc.clear_history(aid)}
+
     def tasks(self, aid: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
         return [t.model_dump(mode="json") for t in self.svc.list_tasks(aid, status)]
 
@@ -98,6 +101,9 @@ class RemoteClient:
 
     def history(self, aid):
         return self._req("GET", f"/astronauts/{aid}/history")
+
+    def clear_history(self, aid):
+        return self._req("DELETE", f"/astronauts/{aid}/history")
 
     def tasks(self, aid, status=None):
         return self._req("GET", f"/astronauts/{aid}/tasks", params={"status": status} if status else None)

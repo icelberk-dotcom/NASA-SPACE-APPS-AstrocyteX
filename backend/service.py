@@ -284,7 +284,10 @@ class AstroGuardService:
                      "user_role": role, "escalate": advice.escalate_to_flight_surgeon, "gemini": self.advisor.status()},
             new_tasks=new_tasks, subjective_symptoms=symptoms)
         if reading.save:
-            self.storage.add_reading(astronaut_id, {k: float(v) for k, v in known.items()}, assessment.model_dump(mode="json"))
+            stored_assessment = assessment.model_dump(mode="json")
+            stored_assessment["mission_day"] = float(reading.mission_day)
+            stored_assessment["subjective_log"] = reading.subjective_log[:300] if reading.subjective_log else ""
+            self.storage.add_reading(astronaut_id, {k: float(v) for k, v in known.items()}, stored_assessment)
         return assessment
 
     # ----------------------------------------------------------------- physics
@@ -417,6 +420,12 @@ class AstroGuardService:
 
     def risk_history(self, astronaut_id: str, n: int = 60) -> List[Dict[str, Any]]:
         return self.storage.risk_history(astronaut_id, n)
+
+    def delete_history_entry(self, astronaut_id: str, reading_id: int) -> bool:
+        return self.storage.delete_reading(astronaut_id, reading_id)
+
+    def clear_history(self, astronaut_id: str) -> int:
+        return self.storage.clear_readings(astronaut_id)
 
     def chat(self, astronaut_id: str, question: str, lang: str = "en", role: str = "non_doctor") -> Dict[str, str]:
         role_norm = "doctor" if role == "doctor" else "non_doctor"

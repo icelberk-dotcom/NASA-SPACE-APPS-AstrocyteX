@@ -282,6 +282,7 @@ tabs = st.tabs(
         t("tab_trends"),
         t("tab_advisor"),
         t("tab_about"),
+        t("tab_health_history"),
     ]
 )
 A = ss["assessment"]
@@ -693,3 +694,101 @@ with tabs[6]:
 with tabs[7]:
     about_path = Path(__file__).resolve().parent.parent.joinpath("docs", "ABOUT_UI.md")
     st.markdown(about_path.read_text(encoding="utf-8") if about_path.exists() else "AstrocyteX")
+
+# ========================================================================= HEALTH HISTORY
+with tabs[8]:
+    st.markdown(f"### {t('hh_title')}")
+    hh_c1, hh_c2, hh_c3 = st.columns([2.4, 1.0, 0.8])
+    hh_note = hh_c1.text_input(t("hh_note_label"), key="hh_note_input")
+    if hh_c2.button(t("hh_record_btn"), type="primary", key="hh_record_btn"):
+        prev_subj = ss["subj_log"]
+        if hh_note.strip():
+            ss["subj_log"] = f"{hh_note.strip()} - {prev_subj}" if prev_subj else hh_note.strip()
+        try:
+            run_assessment()
+        finally:
+            ss["subj_log"] = prev_subj
+        st.rerun()
+    if hh_c3.button(t("hh_clear_btn"), key="hh_clear_btn"):
+        client.clear_history(ss["aid"])
+        st.rerun()
+
+    hh_records = client.history(ss["aid"])
+    if not hh_records:
+        st.info(t("hh_empty"))
+    else:
+        import pandas as pd
+        import plotly.graph_objects as go
+
+        level_palette = {
+            "gray": "#7c7a8c",
+            "green": "#29b377",
+            "yellow": "#df9f15",
+            "red": "#e5484d",
+            "black": "#e5484d",
+        }
+        m1, m2, m3, m4 = st.columns(4)
+        risks_all = [float(r.get("overall_risk_pct") or 0.0) for r in hh_records]
+        m1.metric("Records", len(hh_records))
+        m2.metric("Latest Risk", f"{risks_all[-1]:.1f}%")
+        m3.metric("Mean Risk", f"{sum(risks_all) / len(risks_all):.1f}%")
+        m4.metric("Peak Risk", f"{max(risks_all):.1f}%")
+
+        st.markdown(f"#### {t('hh_col_chart')}")
+        x_labels = [f"#{idx + 1} ({(r.get('ts') or '')[11:19]})" for idx, r in enumerate(hh_records)]
+        bar_colors = [level_palette.get(r.get("level", "gray"), "#9b87f5") for r in hh_records]
+        col_fig = go.Figure(
+            data=[
+                go.Bar(
+                    x=x_labels,
+                    y=risks_all,
+                    marker_color=bar_colors,
+                    text=[f"{v:.1f}%" for v in risks_all],
+                    textposition="outside",
+                    name="Health Risk %",
+                )
+            ]
+        )
+        col_fig.add_hline(y=40, line_dash="dash", line_color="#df9f15")
+        col_fig.add_hline(y=70, line_dash="dash", line_color="#e5484d")
+        col_fig.update_yaxes(range=[0, 108], gridcolor="rgba(196,173,255,.10)")
+        col_fig.update_layout(
+            height=280,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#eee9f8"),
+            margin=dict(l=12, r=12, t=22, b=16),
+        )
+        st.plotly_chart(col_fig, use_container_width=True, key="hh_col_plot")
+
+        st.markdown(f"#### {t('hh_table')}")
+        table_rows = []
+        for idx, r in enumerate(reversed(hh_records)):
+            seq_no = len(hh_records) - idx
+            vit = r.get("vitals") or {}
+            flags = ", ".join(f"{x.get('name')} ({x.get('risk_pct')}%)" for x in (r.get("top_risks") or [])) or "Nominal"
+            table_rows.append({
+                "#": seq_no,
+                "Timestamp (UTC)": (r.get("ts") or "").replace("T", " ")[:19],
+                "Mission Day": int(round(float(r.get("mission_day") or 0))),
+                "Health Risk (%)": round(float(r.get("overall_risk_pct") or 0.0), 1),
+                "Band": str(r.get("level") or "gray").upper(),
+                "Physio (%)": round(float(r.get("physiological_risk_pct") or 0.0), 1),
+                "Voice (%)": "-" if r.get("voice_risk_pct") is None else round(float(r["voice_risk_pct"]), 1),
+                "Habitat (%)": "-" if r.get("env_hazard_pct") is None else round(float(r["env_hazard_pct"]), 1),
+                "HR (bpm)": vit.get("heart_rate"),
+                "SpO2 (%)": vit.get("spo2"),
+                "BP (mmHg)": f"{vit.get('systolic_bp', '-')}/{vit.get('diastolic_bp', '-')}" if vit.get("systolic_bp") is not None else "-",
+                "Sleep (h)": vit.get("sleep_hours"),
+                "Off-Nominal Biomarkers": flags,
+                "Note": r.get("subjective_log") or "-",
+            })
+        df_hh = pd.DataFrame(table_rows)
+        st.dataframe(df_hh, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Export CSV",
+            data=df_hh.to_csv(index=False).encode("utf-8"),
+            file_name=f"astrocytex_health_history_{ss['aid']}.csv",
+            mime="text/csv",
+            key="hh_csv_dl",
+        )
