@@ -17,7 +17,7 @@
 | **Astronaut Voice Psychological & Mood Analysis** | Interactive browser microphone recorder (16 kHz PCM `.wav`), multi-format audio uploader (`.wav`, `.mp3`, `.m4a`, `.ogg`, `.webm`, `.npy`, `.csv`), and playable astronaut voice presets powered by **`AstroVoiceNet v1.0`** (`(48, 64)` log-Mel spectrogram + `42` GeMAPS-inspired prosodic biomarkers) predicting 5 psychological states, 4 mood dimensions (`valence`, `arousal`, `stress`, `fatigue`), and `0-100%` vocal risk fused into overall health risk |
 | **Role-Adaptive LLM Communication** | Selectable **`"I am a doctor"` (`doctor`)** vs **`"I am not a doctor"` (`non_doctor`)** profile across both assessments and interactive chat — delivering quantitative aerospace pathophysiology (`F0`, `jitter`, `shimmer`, `HNR`, `QTc`, cephalad shift, counterfactual uplift) for physicians, or calm jargon-free guidance for crew members |
 | **Upgraded Multimodal Neural Backbone** | **`AstrocyteX-Net v3.0`** (`d_model=80`, `16` Perceiver latents, `SwiGLU GatedInteractionBlock`s): Mamba-2 SSD + TCN/TFT + Environment Encoder & FiLM + 5-Modality Cross-Attention + Neural ODE/PINN + Bayes-by-Backprop & MC-Dropout residual risk head |
-| **12-Lead ECG Integration** | Adapter for the **TEKNOFEST V23 12-lead ECG AI** (10 arrhythmia/conduction classes, QTc, abnormal probability) with automatic offline R-peak screening fallback |
+| **12-Lead ECG Integration** | Adapter for the V23 12-lead ECG AI (10 arrhythmia/conduction classes, QTc, abnormal probability) with automatic offline R-peak screening fallback |
 | **Edge-First Autonomy & Gamification** | Operates 100% offline under deep-space communication delays; awards severity-scaled XP, rank promotions (`Cadet` to `Fleet Admiral`), streaks, and 18 operational badges |
 
 ---
